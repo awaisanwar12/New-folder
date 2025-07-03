@@ -1,26 +1,20 @@
-const { format } = require('date-fns');
+const { formatInTimeZone } = require('date-fns-tz');
 
 const generateNewTournamentEmail = (tournament) => {
     let formattedDateTime = 'Date not available';
     try {
-        console.log('--- Debugging Date in newTournamentTemplate ---');
-        console.log('1. Raw full_name:', tournament.full_name);
-        
         const startDateString = tournament.full_name.split(',')[0];
-        console.log('2. Extracted Start Date String:', startDateString);
+        const timeZone = tournament.timezone || 'UTC'; // Default to UTC if not provided
 
-        const startDate = new Date(startDateString);
-        console.log('3. Parsed Date Object:', startDate.toString());
-        console.log('4. Tournament Timezone:', tournament.timezone);
-
-        const formattedDate = format(startDate, 'eeee, MMMM do, yyyy');
-        const formattedTime = format(startDate, 'h:mm a');
-        formattedDateTime = `${formattedDate} at ${formattedTime} (${tournament.timezone || 'Timezone not specified'})`;
-        console.log('5. Final Formatted String:', formattedDateTime);
-        console.log('--- End Debugging ---');
+        // Format the date and time correctly using the specified timezone
+        const formattedTime = formatInTimeZone(startDateString, timeZone, 'eeee, MMMM do, yyyy h:mm a');
+        
+        // Append the explicit timezone name from the data for absolute clarity
+        formattedDateTime = `${formattedTime} (${timeZone})`;
 
     } catch (error) {
         console.error(`Could not format date for tournament ${tournament.name}:`, error);
+        formattedDateTime = 'Date could not be determined. Please check the website.';
     }
 
     return `
