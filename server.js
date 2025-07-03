@@ -1,11 +1,11 @@
 const app = require('./src/app');
 const config = require('./src/config/environment');
-const { startReminderScheduler } = require('./src/jobs/scheduler');
+const { initializeSchedulers } = require('./src/jobs/scheduler');
 
 const PORT = config.port;
 
-// Start the cron job scheduler
-startReminderScheduler();
+// Initialize and start the scheduled jobs
+initializeSchedulers();
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

@@ -1,9 +1,10 @@
 const axios = require('axios');
-const { parseISO, isBefore, isAfter, isToday, addHours, isValid } = require('date-fns');
+const { parseISO, isBefore, isAfter, isToday, addHours, isValid, subHours } = require('date-fns');
 const config = require('../config/environment');
 
 const TOURNAMENTS_ENDPOINT = '/api/services/app/Tournament/GetAllTournamentsFromDB';
 const PARTICIPANTS_ENDPOINT = '/api/services/app/Participants/GetParticipantsByTournamentIdFromDB';
+const REGISTRATIONS_ENDPOINT = '/api/services/app/TournamentRegistration/GetAllFromDB';
 
 const fetchAllTournaments = async () => {
     try {
@@ -28,7 +29,9 @@ const filterTournaments = (tournaments) => {
             return false;
         }
         const startDateString = t.full_name.split(',')[0];
-        if (!startDateString) return false;
+        if (!startDateString || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(startDateString)) {
+            return false; // Silently skip if no valid date format
+        }
 
         const regOpen = parseISO(t.registration_opening_datetime);
         const regClose = parseISO(t.registration_closing_datetime);
@@ -46,7 +49,9 @@ const filterTournaments = (tournaments) => {
             return false;
         }
         const startDateString = t.full_name.split(',')[0];
-        if (!startDateString) return false;
+        if (!startDateString || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(startDateString)) {
+            return false; // Silently skip if no valid date format
+        }
         
         const startDate = parseISO(startDateString);
         if (!isValid(startDate)) return false;
@@ -77,8 +82,46 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
     }
 };
 
+const fetchAllRegistrations = async () => {
+    try {
+        console.log('Fetching all registrations from DB...');
+        const response = await axios.get(`${config.apiBaseUrl}${REGISTRATIONS_ENDPOINT}`);
+        if (response.data && response.data.result && Array.isArray(response.data.result.items)) {
+            return response.data.result.items;
+        }
+        throw new Error('Invalid API response format for registrations.');
+    } catch (error) {
+        console.error('Error fetching registrations:', error.message);
+        throw new Error('Could not fetch registration data.');
+    }
+};
+
+const filterRecentTournaments = (tournaments) => {
+    const now = new Date();
+    const twentyFourHoursAgo = subHours(now, 24);
+
+    return tournaments.filter(t => {
+        if (!t.full_name || typeof t.full_name !== 'string') {
+            return false;
+        }
+        const startDateString = t.full_name.split(',')[0];
+        if (!startDateString || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(startDateString)) {
+            return false; // Silently skip if no valid date format
+        }
+
+        const startDate = parseISO(startDateString);
+        if (!isValid(startDate)) {
+            return false;
+        }
+
+        return isAfter(startDate, twentyFourHoursAgo) && isBefore(startDate, now);
+    });
+};
+
 module.exports = {
     fetchAllTournaments,
     filterTournaments,
     fetchParticipantsByTournamentId,
+    fetchAllRegistrations,
+    filterRecentTournaments,
 };

@@ -1,18 +1,25 @@
-const formData = require('form-data');
-const Mailgun = require('mailgun.js');
+const nodemailer = require('nodemailer');
 const config = require('../config/environment');
 
-const mailgun = new Mailgun(formData);
-const mg = mailgun.client({ username: 'api', key: config.email.apiKey });
+// Create a transporter object using SMTP transport
+const transporter = nodemailer.createTransport({
+    host: config.email.host,
+    port: config.email.port,
+    secure: config.email.port == 465, // true for 465, false for other ports
+    auth: {
+        user: config.email.user,
+        pass: config.email.pass,
+    },
+});
 
 /**
- * Sends an email using the Mailgun API.
+ * Sends an email.
  * @param {string} to - Recipient's email address.
  * @param {string} subject - Email subject.
  * @param {string} html - HTML body of the email.
  */
 const sendEmail = async (to, subject, html) => {
-    const messageData = {
+    const mailOptions = {
         from: config.email.from,
         to: to,
         subject: subject,
@@ -20,10 +27,10 @@ const sendEmail = async (to, subject, html) => {
     };
 
     try {
-        console.log(`Sending email to: ${to} via Mailgun`);
-        const response = await mg.messages.create(config.email.domain, messageData);
-        console.log('Email sent successfully via Mailgun!', response);
-        return response;
+        console.log(`Sending email to: ${to}`);
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Email sent successfully! Message ID:', info.messageId);
+        return info;
     } catch (error) {
         console.error(`Error sending email to ${to}:`, error);
         throw new Error('Failed to send email.');

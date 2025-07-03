@@ -1,19 +1,64 @@
 const cron = require('node-cron');
 const reminderService = require('../services/reminderService');
+const newTournamentNotificationService = require('../services/newTournamentNotificationService');
 
-// Schedule a cron job to run every hour
-const startReminderScheduler = () => {
-    // This cron expression means 'at the beginning of every hour'
-    cron.schedule('0 * * * *', () => {
-        console.log('-------------------------------------');
-        console.log('Running scheduled job: Send Tournament Reminders');
-        reminderService.sendTournamentReminders().catch(error => {
-            console.error('Scheduled reminder job failed:', error);
+const scheduledJobs = {};
+
+const jobs = [
+    {
+        name: 'tournamentReminders',
+        schedule: '0 * * * *', // Every hour
+        task: reminderService.sendTournamentReminders,
+        description: 'Sends reminders for tournaments starting soon.'
+    },
+    {
+        name: 'newTournamentNotifications',
+        schedule: '* * * * *', // Every minute for testing
+        task: newTournamentNotificationService.sendNewTournamentNotifications,
+        description: 'Sends notifications for newly created tournaments.'
+    }
+];
+
+const startJob = (name) => {
+    const jobInfo = jobs.find(j => j.name === name);
+    if (!jobInfo) {
+        console.error(`Job "${name}" not found.`);
+        return false;
+    }
+
+    if (scheduledJobs[name]) {
+        console.log(`Job "${name}" is already running.`);
+        return true;
+    }
+
+    const cronJob = cron.schedule(jobInfo.schedule, () => {
+        console.log(`--- Running job: ${jobInfo.name} ---`);
+        jobInfo.task().catch(error => {
+            console.error(`Job "${jobInfo.name}" failed:`, error);
         });
-        console.log('-------------------------------------');
     });
 
-    console.log('Cron job for tournament reminders has been scheduled to run every hour.');
+    scheduledJobs[name] = cronJob;
+    console.log(`Job "${name}" scheduled. Description: ${jobInfo.description}`);
+    return true;
 };
 
-module.exports = { startReminderScheduler };
+const stopJob = (name) => {
+    if (scheduledJobs[name]) {
+        scheduledJobs[name].stop();
+        delete scheduledJobs[name];
+        console.log(`Job "${name}" stopped.`);
+        return true;
+    } else {
+        console.log(`Job "${name}" is not running.`);
+        return false;
+    }
+};
+
+const initializeSchedulers = () => {
+    // Start jobs by default here if needed
+    startJob('tournamentReminders');
+    // The new job is off by default, can be started via API
+};
+
+module.exports = { initializeSchedulers, startJob, stopJob, jobs };

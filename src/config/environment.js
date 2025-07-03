@@ -4,8 +4,10 @@ const config = {
     port: process.env.PORT || 3000,
     apiBaseUrl: process.env.API_BASE_URL,
     email: {
-        apiKey: process.env.MAILGUN_API_KEY,
-        domain: process.env.MAILGUN_DOMAIN,
+        host: process.env.EMAIL_HOST,
+        port: process.env.EMAIL_PORT,
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
         from: process.env.EMAIL_FROM,
     },
 };
