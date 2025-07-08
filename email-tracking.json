@@ -1,0 +1,22 @@
+{
+  "sentEmails": [
+    {
+      "key": "2245649247174856703-new_tournament-2025-07-08",
+      "tournamentId": "2245649247174856703",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-08T19:36:03.273Z",
+      "date": "2025-07-08",
+      "tournamentName": "PUBG FFA League Test",
+      "userCount": 1
+    },
+    {
+      "key": "2245707599986040831-new_tournament-2025-07-08",
+      "tournamentId": "2245707599986040831",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-08T19:40:01.965Z",
+      "date": "2025-07-08",
+      "tournamentName": "FFA league QA test",
+      "userCount": 1
+    }
+  ]
+}

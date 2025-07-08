@@ -2,6 +2,7 @@ const express = require('express');
 const tournamentRoutes = require('./routes/tournamentRoutes');
 const reminderRoutes = require('./routes/reminderRoutes');
 const schedulerRoutes = require('./routes/schedulerRoutes');
+const emailTrackingRoutes = require('./routes/emailTrackingRoutes');
 
 // Initialize Express app
 const app = express();
@@ -20,6 +21,7 @@ app.get('/', (req, res) => {
 app.use('/api', tournamentRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/scheduler', schedulerRoutes);
+app.use('/api/email-tracking', emailTrackingRoutes);
 
 // 404 Not Found Handler
 app.use((req, res, next) => {

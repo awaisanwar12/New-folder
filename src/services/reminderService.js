@@ -1,10 +1,14 @@
 const tournamentService = require('./tournamentService');
 const emailService = require('./emailService');
+const emailTrackingService = require('./emailTrackingService');
 const { generateReminderEmail } = require('../templates/reminderTemplate');
 
 const sendTournamentReminders = async () => {
     console.log('Starting process to send tournament reminders...');
     try {
+        // Clean up old tracking entries first
+        emailTrackingService.cleanupOldEntries();
+
         // 1. Fetch all tournaments and filter for those starting soon
         const allTournaments = await tournamentService.fetchAllTournaments();
         const { startingToday } = tournamentService.filterTournaments(allTournaments);
@@ -16,11 +20,19 @@ const sendTournamentReminders = async () => {
 
         console.log(`Found ${startingToday.length} tournament(s) starting soon.`);
         let emailsSent = 0;
+        let emailsSkipped = 0;
         let participantsFiltered = 0;
 
         // 2. For each tournament, get participants and send emails
         for (const tournament of startingToday) {
             try {
+                // Check if reminder already sent for this tournament today
+                if (emailTrackingService.hasEmailBeenSent(tournament.tournament_ID, 'reminder')) {
+                    console.log(`Reminder already sent today for tournament: ${tournament.name} (ID: ${tournament.tournament_ID})`);
+                    emailsSkipped++;
+                    continue;
+                }
+
                 const participants = await tournamentService.fetchParticipantsByTournamentId(tournament.tournament_ID);
                 if (!participants || participants.length === 0) {
                     console.log(`No participants found for tournament: ${tournament.name}`);
@@ -63,6 +75,13 @@ const sendTournamentReminders = async () => {
                     `Tournament Reminder: ${tournament.name} (${mailinatorParticipants.length} participants)`,
                     emailHtml
                 );
+
+                // Mark email as sent to prevent duplicates
+                emailTrackingService.markEmailAsSent(tournament.tournament_ID, 'reminder', {
+                    tournamentName: tournament.name,
+                    participantCount: mailinatorParticipants.length
+                });
+
                 emailsSent++;
                 console.log(`Sent consolidated reminder to: noreply@tgcesports.gg for ${mailinatorParticipants.length} participants`);
 
@@ -72,9 +91,9 @@ const sendTournamentReminders = async () => {
             }
         }
 
-        const summary = `Reminder process complete. Total emails sent: ${emailsSent}. Non-mailinator emails filtered: ${participantsFiltered}.`;
+        const summary = `Reminder process complete. Total emails sent: ${emailsSent}. Emails skipped (already sent): ${emailsSkipped}. Non-mailinator emails filtered: ${participantsFiltered}.`;
         console.log(summary);
-        return { success: true, message: summary, emailsSent, participantsFiltered };
+        return { success: true, message: summary, emailsSent, emailsSkipped, participantsFiltered };
 
     } catch (error) {
         console.error('An unexpected error occurred during the reminder process:', error);
