@@ -1,39 +1,49 @@
-const nodemailer = require('nodemailer');
+const AWS = require('aws-sdk');
 const config = require('../config/environment');
 
-// Create a transporter object using SMTP transport
-const transporter = nodemailer.createTransport({
-    host: config.email.host,
-    port: config.email.port,
-    secure: config.email.port == 465, // true for 465, false for other ports
-    auth: {
-        user: config.email.user,
-        pass: config.email.pass,
-    },
+// Configure AWS SES
+AWS.config.update({
+    accessKeyId: config.aws.accessKeyId,
+    secretAccessKey: config.aws.secretAccessKey,
+    region: config.aws.region,
 });
 
+const ses = new AWS.SES({ apiVersion: '2010-12-01' });
+
 /**
- * Sends an email.
+ * Sends an email using Amazon SES.
  * @param {string} to - Recipient's email address.
  * @param {string} subject - Email subject.
  * @param {string} html - HTML body of the email.
  */
 const sendEmail = async (to, subject, html) => {
-    const mailOptions = {
-        from: config.email.from,
-        to: to,
-        subject: subject,
-        html: html,
+    const params = {
+        Destination: {
+            ToAddresses: [to],
+        },
+        Message: {
+            Body: {
+                Html: {
+                    Charset: 'UTF-8',
+                    Data: html,
+                },
+            },
+            Subject: {
+                Charset: 'UTF-8',
+                Data: subject,
+            },
+        },
+        Source: config.aws.sesEmail,
     };
 
     try {
-        console.log(`Sending email to: ${to}`);
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully! Message ID:', info.messageId);
-        return info;
+        console.log(`Sending email via Amazon SES to: ${to}`);
+        const result = await ses.sendEmail(params).promise();
+        console.log('Email sent successfully! Message ID:', result.MessageId);
+        return result;
     } catch (error) {
         console.error(`Error sending email to ${to}:`, error);
-        throw new Error('Failed to send email.');
+        throw new Error('Failed to send email via Amazon SES.');
     }
 };
 

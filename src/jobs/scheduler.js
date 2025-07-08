@@ -7,7 +7,7 @@ const scheduledJobs = {};
 const jobs = [
     {
         name: 'tournamentReminders',
-        schedule: '0 * * * *', // Every hour
+        schedule: '* * * * *', // Every hour
         task: reminderService.sendTournamentReminders,
         description: 'Sends reminders for tournaments starting soon.'
     },

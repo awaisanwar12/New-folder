@@ -10,6 +10,12 @@ const config = {
         pass: process.env.EMAIL_PASS,
         from: process.env.EMAIL_FROM,
     },
+    aws: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION,
+        sesEmail: process.env.AWS_SES_EMAIL_FROM || 'noreply@tgcesports.gg',
+    },
 };
 
 module.exports = config;

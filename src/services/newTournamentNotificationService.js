@@ -19,35 +19,54 @@ const sendNewTournamentNotifications = async () => {
         // 2. Fetch all registered users
         const allRegistrations = await tournamentService.fetchAllRegistrations();
         
-        // 3. Filter for unique @mailinator.com emails
-        const emailsToNotify = [...new Set(
+        // 3. Filter for unique mailinator emails
+        const mailinatorEmails = [...new Set(
             allRegistrations
                 .map(reg => reg.email)
-                .filter(email => email && email.endsWith('@ofacer.com'))
+                .filter(email => email && email.toLowerCase().includes('mailinator'))
         )];
 
-        if (emailsToNotify.length === 0) {
+        if (mailinatorEmails.length === 0) {
             console.log('No mailinator users found to notify.');
             return { success: true, message: 'No mailinator users to notify.' };
         }
 
-        console.log(`Found ${emailsToNotify.length} unique mailinator users to notify.`);
+        console.log(`Found ${mailinatorEmails.length} unique mailinator users to notify.`);
 
         let totalEmailsSent = 0;
 
-        // 4. Send email for each new tournament to each user
+        // 4. Send consolidated email for each new tournament
         for (const tournament of recentTournaments) {
-            console.log(`Sending notifications for new tournament: ${tournament.name}`);
-            const emailHtml = generateNewTournamentEmail(tournament);
-            const subject = `New Tournament Alert: ${tournament.name}`;
+            console.log(`Preparing notification for new tournament: ${tournament.name}`);
+            
+            const userList = mailinatorEmails.join('<br>');
+            const emailHtml = `
+                <h2>New Tournament Alert - ${tournament.name}</h2>
+                <p><strong>A new tournament has been created!</strong></p>
+                <p><strong>Tournament Details:</strong></p>
+                <ul>
+                    <li>Name: ${tournament.name}</li>
+                    <li>ID: ${tournament.tournament_ID}</li>
+                    <li>Registration Opens: ${tournament.registration_opening_datetime}</li>
+                    <li>Registration Closes: ${tournament.registration_closing_datetime}</li>
+                </ul>
+                <p><strong>Mailinator Users to Notify (${mailinatorEmails.length}):</strong></p>
+                <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
+                    ${userList}
+                </div>
+                <p><em>This email was sent to the verified address instead of individual mailinator addresses due to AWS SES sandbox limitations.</em></p>
+            `;
 
-            for (const email of emailsToNotify) {
-                try {
-                    await emailService.sendEmail(email, subject, emailHtml);
-                    totalEmailsSent++;
-                } catch (error) {
-                    console.error(`Failed to send new tournament email to ${email}:`, error.message);
-                }
+            try {
+                await emailService.sendEmail(
+                    'noreply@tgcesports.gg',
+                    `New Tournament Alert: ${tournament.name} (${mailinatorEmails.length} users)`,
+                    emailHtml
+                );
+                totalEmailsSent++;
+                console.log(`Sent consolidated new tournament notification to: noreply@tgcesports.gg for ${mailinatorEmails.length} users`);
+            } catch (error) {
+                console.error(`Failed to send new tournament email for ${tournament.name}:`, error.message);
             }
         }
 
