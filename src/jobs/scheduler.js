@@ -57,7 +57,7 @@ const stopJob = (name) => {
 
 const initializeSchedulers = () => {
     // Start jobs by default here if needed
-    startJob('tournamentReminders');
+    // startJob('tournamentReminders');
     // The new job is off by default, can be started via API
 };
 
