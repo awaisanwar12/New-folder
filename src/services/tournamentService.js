@@ -11,7 +11,6 @@ const USERS_ENDPOINT = '/api/services/app/User/GetAll';
 const createAuthenticatedRequest = () => {
     return axios.create({
         headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${config.api.bearerToken}`
         }
     });
@@ -137,7 +136,7 @@ const fetchAllUsers = async () => {
         console.log('Fetching all users with mailinator keyword from external API...');
         
         const authenticatedAxios = createAuthenticatedRequest();
-        const requestUrl = `${config.apiBaseUrl}${USERS_ENDPOINT}`;
+        const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
         const requestParams = {
             keyword: 'mailinator'  // Only keyword parameter to match Postman exactly
         };

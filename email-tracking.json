@@ -1,0 +1,34 @@
+{
+  "sentEmails": [
+    {
+      "key": "2245649247174856703-new_tournament-2025-07-09",
+      "tournamentId": "2245649247174856703",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-09T15:25:51.581Z",
+      "date": "2025-07-09",
+      "tournamentName": "PUBG FFA League Test",
+      "userCount": 10,
+      "emailsSent": 10
+    },
+    {
+      "key": "2249980181405806591-new_tournament-2025-07-09",
+      "tournamentId": "2249980181405806591",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-09T15:26:00.188Z",
+      "date": "2025-07-09",
+      "tournamentName": "PUBG FFA League Test 2",
+      "userCount": 10,
+      "emailsSent": 10
+    },
+    {
+      "key": "2253791155838111743-new_tournament-2025-07-09",
+      "tournamentId": "2253791155838111743",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-09T15:26:11.713Z",
+      "date": "2025-07-09",
+      "tournamentName": "Team Test",
+      "userCount": 10,
+      "emailsSent": 10
+    }
+  ]
+}
