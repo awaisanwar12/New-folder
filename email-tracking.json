@@ -26,6 +26,15 @@
       "date": "2025-07-09",
       "tournamentName": "PUBG FFA League Test",
       "userCount": 1
+    },
+    {
+      "key": "2245707599986040831-new_tournament-2025-07-09",
+      "tournamentId": "2245707599986040831",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-09T11:45:04.152Z",
+      "date": "2025-07-09",
+      "tournamentName": "FFA league QA test",
+      "userCount": 1
     }
   ]
 }

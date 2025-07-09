@@ -1,7 +1,7 @@
 const tournamentService = require('./tournamentService');
 const emailService = require('./emailService');
 const emailTrackingService = require('./emailTrackingService');
-const { generateNewTournamentEmail } = require('../templates/newTournamentTemplate');
+const { generateNewTournamentEmail, getNewTournamentEmailSubject } = require('../templates/newTournamentTemplate');
 
 const sendNewTournamentNotifications = async () => {
     console.log('Starting process to send new tournament notifications...');
@@ -23,24 +23,28 @@ const sendNewTournamentNotifications = async () => {
         // 2. Fetch all registered users
         const allRegistrations = await tournamentService.fetchAllRegistrations();
         
-        // 3. Filter for unique mailinator emails
-        const mailinatorEmails = [...new Set(
+        // 3. Filter for unique @mailinator.com users
+        const mailinatorUsers = [...new Map(
             allRegistrations
-                .map(reg => reg.email)
-                .filter(email => email && email.toLowerCase().includes('mailinator'))
-        )];
+                .filter(reg => reg.email && reg.email.toLowerCase().endsWith('@mailinator.com'))
+                .map(reg => [reg.email, {
+                    email: reg.email,
+                    name: reg.name || reg.username || 'Gamer',
+                    language: reg.language || 'english'
+                }])
+        ).values()];
 
-        if (mailinatorEmails.length === 0) {
-            console.log('No mailinator users found to notify.');
-            return { success: true, message: 'No mailinator users to notify.' };
+        if (mailinatorUsers.length === 0) {
+            console.log('No @mailinator.com users found to notify.');
+            return { success: true, message: 'No @mailinator.com users to notify.' };
         }
 
-        console.log(`Found ${mailinatorEmails.length} unique mailinator users to notify.`);
+        console.log(`Found ${mailinatorUsers.length} unique @mailinator.com users to notify.`);
 
         let totalEmailsSent = 0;
         let emailsSkipped = 0;
 
-        // 4. Send consolidated email for each new tournament
+        // 4. Send individual emails to each user for each new tournament
         for (const tournament of recentTournaments) {
             try {
                 // Check if new tournament notification already sent for this tournament today
@@ -52,38 +56,42 @@ const sendNewTournamentNotifications = async () => {
 
                 console.log(`Preparing notification for new tournament: ${tournament.name}`);
                 
-                const userList = mailinatorEmails.join('<br>');
-                const emailHtml = `
-                    <h2>New Tournament Alert - ${tournament.name}</h2>
-                    <p><strong>A new tournament has been created!</strong></p>
-                    <p><strong>Tournament Details:</strong></p>
-                    <ul>
-                        <li>Name: ${tournament.name}</li>
-                        <li>ID: ${tournament.tournament_ID}</li>
-                        <li>Registration Opens: ${tournament.registration_opening_datetime}</li>
-                        <li>Registration Closes: ${tournament.registration_closing_datetime}</li>
-                    </ul>
-                    <p><strong>Mailinator Users to Notify (${mailinatorEmails.length}):</strong></p>
-                    <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
-                        ${userList}
-                    </div>
-                    <p><em>This email was sent to the verified address instead of individual mailinator addresses due to AWS SES sandbox limitations.</em></p>
-                `;
+                let tournamentEmailsSent = 0;
+                for (const user of mailinatorUsers) {
+                    try {
+                        // Set language to English by default if not already English
+                        if (!user.language || user.language.toLowerCase() !== 'english') {
+                            user.language = 'english';
+                        }
 
-                await emailService.sendEmail(
-                    'noreply@tgcesports.gg',
-                    `New Tournament Alert: ${tournament.name} (${mailinatorEmails.length} users)`,
-                    emailHtml
-                );
+                        // Generate personalized email using bilingual template
+                        const emailHtml = generateNewTournamentEmail(tournament, user, user.language);
+                        const emailSubject = getNewTournamentEmailSubject(user.language, tournament);
+
+                        await emailService.sendEmail(
+                            user.email,
+                            emailSubject,
+                            emailHtml
+                        );
+
+                        tournamentEmailsSent++;
+                        console.log(`Sent new tournament notification to: ${user.email} for tournament: ${tournament.name}`);
+
+                    } catch (error) {
+                        console.error(`Failed to send email to ${user.email}:`, error.message);
+                        // Continue to next user even if one fails
+                    }
+                }
 
                 // Mark email as sent to prevent duplicates
                 emailTrackingService.markEmailAsSent(tournament.tournament_ID, 'new_tournament', {
                     tournamentName: tournament.name,
-                    userCount: mailinatorEmails.length
+                    userCount: mailinatorUsers.length,
+                    emailsSent: tournamentEmailsSent
                 });
 
-                totalEmailsSent++;
-                console.log(`Sent consolidated new tournament notification to: noreply@tgcesports.gg for ${mailinatorEmails.length} users`);
+                totalEmailsSent += tournamentEmailsSent;
+                console.log(`Sent ${tournamentEmailsSent} individual new tournament notifications for: ${tournament.name}`);
 
             } catch (error) {
                 console.error(`Failed to send new tournament email for ${tournament.name}:`, error.message);
