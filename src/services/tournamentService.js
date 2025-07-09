@@ -54,21 +54,18 @@ const createAuthenticatedRequestForUsers = async () => {
 
 const fetchAllTournaments = async () => {
     try {
-        console.log('Fetching tournaments from external API...');
         const response = await axios.get(`${config.apiBaseUrl}${TOURNAMENTS_ENDPOINT}`);
         if (!response.data || !response.data.result) {
             throw new Error('Invalid API response format from external source.');
         }
         return response.data.result;
     } catch (error) {
-        console.error('Error fetching tournaments from external API:', error.message);
         throw new Error('Could not fetch tournament data from the external source.');
     }
 };
 
 const filterTournaments = (tournaments) => {
     const now = new Date();
-    console.log(`Filtering based on current time: ${now.toISOString()}`);
 
     const upcoming = tournaments.filter(t => {
         if (!t.registration_opening_datetime || !t.registration_closing_datetime || !t.full_name || typeof t.full_name !== 'string') {
@@ -114,7 +111,6 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
         throw new Error('Tournament ID is required to fetch participants.');
     }
     try {
-        console.log(`Fetching participants for tournament ID: ${tournamentId}`);
         const response = await axios.get(`${config.apiBaseUrl}${PARTICIPANTS_ENDPOINT}`, {
             params: { tournamentId }
         });
@@ -123,21 +119,18 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
         }
         throw new Error('Invalid API response format for participants.');
     } catch (error) {
-        console.error(`Error fetching participants for tournament ${tournamentId}:`, error.message);
         throw new Error('Could not fetch participant data.');
     }
 };
 
 const fetchAllRegistrations = async () => {
     try {
-        console.log('Fetching all registrations from DB...');
         const response = await axios.get(`${config.apiBaseUrl}${REGISTRATIONS_ENDPOINT}`);
         if (response.data && response.data.result && Array.isArray(response.data.result.items)) {
             return response.data.result.items;
         }
         throw new Error('Invalid API response format for registrations.');
     } catch (error) {
-        console.error('Error fetching registrations:', error.message);
         throw new Error('Could not fetch registration data.');
     }
 };
@@ -169,31 +162,48 @@ const fetchAllUsers = async () => {
         console.log('Fetching all users with mailinator keyword from external API...');
         
         const authenticatedAxios = await createAuthenticatedRequestForUsers();
-        const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
-        const requestParams = {
-            keyword: 'mailinator'  // Only keyword parameter to match Postman exactly
-        };
-        
-        // Debug logging
-        console.log('🔍 DEBUG - Request URL:', requestUrl);
-        console.log('🔍 DEBUG - Request Params:', requestParams);
-        console.log('🔍 DEBUG - Using fresh authentication token');
-        
-        const response = await authenticatedAxios.get(requestUrl, {
-            params: requestParams
-        });
+        let allUsers = [];
+        let skipCount = 0;
+        const maxResultCount = 20;
+        let hasMoreUsers = true;
 
-        if (!response.data || !response.data.result) {
-            throw new Error('Invalid API response format from users endpoint.');
+        while (hasMoreUsers) {
+            console.log(`🔍 Fetching users batch: SkipCount=${skipCount}, MaxResultCount=${maxResultCount}`);
+            
+            const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
+            const requestParams = {
+                keyword: 'mailinator',
+                SkipCount: skipCount,
+                MaxResultCount: maxResultCount
+            };
+            
+            console.log('🔍 DEBUG - Request URL:', requestUrl);
+            console.log('🔍 DEBUG - Request Params:', requestParams);
+            
+            const response = await authenticatedAxios.get(requestUrl, {
+                params: requestParams
+            });
+
+            if (!response.data || !response.data.result) {
+                throw new Error('Invalid API response format from users endpoint.');
+            }
+
+            const users = response.data.result.items || response.data.result;
+            if (!Array.isArray(users)) {
+                throw new Error('Expected users array in API response.');
+            }
+
+            allUsers = allUsers.concat(users);
+            
+            // If we got fewer users than maxResultCount, we've reached the end
+            hasMoreUsers = users.length === maxResultCount;
+            skipCount += maxResultCount;
+            
+            console.log(`📊 Fetched ${users.length} users in this batch. Total so far: ${allUsers.length}`);
         }
 
-        const users = response.data.result.items || response.data.result;
-        if (!Array.isArray(users)) {
-            throw new Error('Expected users array in API response.');
-        }
-
-        console.log(`Successfully fetched ${users.length} users with mailinator keyword.`);
-        return users;
+        console.log(`✅ Successfully fetched ${allUsers.length} total users with mailinator keyword.`);
+        return allUsers;
 
     } catch (error) {
         console.error('🚨 ERROR Details:', {
