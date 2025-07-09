@@ -18,12 +18,38 @@ const sendNewTournamentNotifications = async () => {
             return { success: true, message: 'No new tournaments.' };
         }
 
-        console.log(`Found ${recentTournaments.length} new tournament(s).`);
+        // 2. Filter tournaments to only those with open registration
+        const currentTime = new Date();
+        const openRegistrationTournaments = recentTournaments.filter(tournament => {
+            try {
+                const registrationOpen = new Date(tournament.registration_opening_datetime);
+                const registrationClose = new Date(tournament.registration_closing_datetime);
+                
+                // Check if current time is between registration open and close dates
+                const isRegistrationOpen = currentTime >= registrationOpen && currentTime <= registrationClose;
+                
+                if (!isRegistrationOpen) {
+                    console.log(`Skipping tournament ${tournament.name} - Registration not open (Opens: ${tournament.registration_opening_datetime}, Closes: ${tournament.registration_closing_datetime})`);
+                }
+                
+                return isRegistrationOpen;
+            } catch (error) {
+                console.error(`Error checking registration dates for tournament ${tournament.name}:`, error);
+                return false; // Skip tournaments with invalid dates
+            }
+        });
 
-        // 2. Fetch all registered users
+        if (openRegistrationTournaments.length === 0) {
+            console.log('No tournaments with open registration found. No notifications to send.');
+            return { success: true, message: 'No tournaments with open registration.' };
+        }
+
+        console.log(`Found ${openRegistrationTournaments.length} tournament(s) with open registration (filtered ${recentTournaments.length - openRegistrationTournaments.length} with closed registration).`);
+
+        // 3. Fetch all registered users
         const allRegistrations = await tournamentService.fetchAllRegistrations();
         
-        // 3. Filter for unique @mailinator.com users
+        // 4. Filter for unique @mailinator.com users
         const mailinatorUsers = [...new Map(
             allRegistrations
                 .filter(reg => reg.email && reg.email.toLowerCase().endsWith('@mailinator.com'))
@@ -44,8 +70,8 @@ const sendNewTournamentNotifications = async () => {
         let totalEmailsSent = 0;
         let emailsSkipped = 0;
 
-        // 4. Send individual emails to each user for each new tournament
-        for (const tournament of recentTournaments) {
+        // 5. Send individual emails to each user for each tournament with open registration
+        for (const tournament of openRegistrationTournaments) {
             try {
                 // Check if new tournament notification already sent for this tournament today
                 if (emailTrackingService.hasEmailBeenSent(tournament.tournament_ID, 'new_tournament')) {
