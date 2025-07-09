@@ -1,7 +1,7 @@
 const tournamentService = require('./tournamentService');
 const emailService = require('./emailService');
 const emailTrackingService = require('./emailTrackingService');
-const { generateReminderEmail } = require('../templates/reminderTemplate');
+const { generateReminderEmail, getReminderEmailSubject } = require('../templates/reminderTemplate');
 
 const sendTournamentReminders = async () => {
     console.log('Starting process to send tournament reminders...');
@@ -39,51 +39,59 @@ const sendTournamentReminders = async () => {
                     continue;
                 }
 
-                // Filter participants to only those with mailinator email addresses
+                // Set language to English by default if not already English
+                participants.forEach(participant => {
+                    if (!participant.language || participant.language.toLowerCase() !== 'english') {
+                        participant.language = 'english';
+                    }
+                });
+
+                // Filter participants to only those with @mailinator.com email addresses
                 const mailinatorParticipants = participants.filter(participant => 
-                    participant.email && participant.email.toLowerCase().includes('mailinator')
+                    participant.email && participant.email.toLowerCase().endsWith('@mailinator.com')
                 );
 
                 participantsFiltered += participants.length - mailinatorParticipants.length;
 
                 if (mailinatorParticipants.length === 0) {
-                    console.log(`No mailinator participants found for tournament: ${tournament.name}`);
+                    console.log(`No @mailinator.com participants found for tournament: ${tournament.name}`);
                     continue;
                 }
 
-                console.log(`Found ${mailinatorParticipants.length} mailinator participants for tournament: ${tournament.name} (filtered ${participants.length - mailinatorParticipants.length} non-mailinator emails)`);
+                console.log(`Found ${mailinatorParticipants.length} @mailinator.com participants for tournament: ${tournament.name} (filtered ${participants.length - mailinatorParticipants.length} non-mailinator emails)`);
 
-                // 3. Send consolidated email to verified address with all participant info
-                const participantList = mailinatorParticipants.map(p => `${p.name || 'N/A'} (${p.email})`).join('<br>');
-                const emailHtml = `
-                    <h2>Tournament Reminder - ${tournament.name}</h2>
-                    <p><strong>Tournament starts soon!</strong></p>
-                    <p><strong>Tournament Details:</strong></p>
-                    <ul>
-                        <li>Name: ${tournament.name}</li>
-                        <li>ID: ${tournament.tournament_ID}</li>
-                    </ul>
-                    <p><strong>Mailinator Participants (${mailinatorParticipants.length}):</strong></p>
-                    <div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
-                        ${participantList}
-                    </div>
-                    <p><em>This email was sent to the verified address instead of individual mailinator addresses due to AWS SES sandbox limitations.</em></p>
-                `;
+                // 3. Send individual emails to each participant
+                let tournamentEmailsSent = 0;
+                for (const participant of mailinatorParticipants) {
+                    try {
+                        // Generate personalized email using English template
+                        const emailHtml = generateReminderEmail(participant, tournament);
+                        const emailSubject = getReminderEmailSubject(participant.language, tournament);
 
-                await emailService.sendEmail(
-                    'noreply@tgcesports.gg',
-                    `Tournament Reminder: ${tournament.name} (${mailinatorParticipants.length} participants)`,
-                    emailHtml
-                );
+                        await emailService.sendEmail(
+                            participant.email,
+                            emailSubject,
+                            emailHtml
+                        );
+
+                        tournamentEmailsSent++;
+                        console.log(`Sent reminder email to: ${participant.email} for tournament: ${tournament.name}`);
+
+                    } catch (error) {
+                        console.error(`Failed to send email to ${participant.email}:`, error.message);
+                        // Continue to next participant even if one fails
+                    }
+                }
 
                 // Mark email as sent to prevent duplicates
                 emailTrackingService.markEmailAsSent(tournament.tournament_ID, 'reminder', {
                     tournamentName: tournament.name,
-                    participantCount: mailinatorParticipants.length
+                    participantCount: mailinatorParticipants.length,
+                    emailsSent: tournamentEmailsSent
                 });
 
-                emailsSent++;
-                console.log(`Sent consolidated reminder to: noreply@tgcesports.gg for ${mailinatorParticipants.length} participants`);
+                emailsSent += tournamentEmailsSent;
+                console.log(`Sent ${tournamentEmailsSent} individual reminder emails for tournament: ${tournament.name}`);
 
             } catch (error) {
                 console.error(`Failed to process reminders for tournament ${tournament.name}:`, error.message);

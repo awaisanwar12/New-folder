@@ -1,5 +1,20 @@
 const { format } = require('date-fns');
 
+// Language-specific templates
+const emailTexts = {
+    english: {
+        subject: 'Tournament Reminder',
+        greeting: 'Hello',
+        reminderText: 'This is a friendly reminder that the tournament',
+        startingSoon: 'is scheduled to start soon!',
+        startDate: 'Start Date:',
+        startTime: 'Start Time:',
+        goodLuck: 'Please be prepared and ready for your match. Good luck!',
+        footer: 'This is an automated reminder from The Game Company.'
+    }
+    // Add more languages here as needed
+};
+
 /**
  * Generates the HTML content for a tournament reminder email.
  * @param {object} participant - The participant object.
@@ -7,6 +22,9 @@ const { format } = require('date-fns');
  * @returns {string} - The HTML content of the email.
  */
 const generateReminderEmail = (participant, tournament) => {
+    // Get language (default to English if not set)
+    const language = participant.language?.toLowerCase() || 'english';
+    const texts = emailTexts[language] || emailTexts.english;
     const startDateString = tournament.full_name.split(',')[0];
     const startDate = new Date(startDateString);
 
@@ -16,11 +34,11 @@ const generateReminderEmail = (participant, tournament) => {
 
     return `
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="${language}">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Tournament Reminder</title>
+            <title>${texts.subject}</title>
             <style>
                 body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px; }
@@ -31,16 +49,16 @@ const generateReminderEmail = (participant, tournament) => {
         </head>
         <body>
             <div class="container">
-                <div class="header">Tournament Reminder: ${tournament.name}</div>
+                <div class="header">${texts.subject}: ${tournament.name}</div>
                 <div class="content">
-                    <p>Hello ${participant.name},</p>
-                    <p>This is a friendly reminder that the tournament <strong>${tournament.name}</strong> is scheduled to start soon!</p>
-                    <p><strong>Start Date:</strong> ${formattedDate}</p>
-                    <p><strong>Start Time:</strong> ${formattedTime} (${tournament.timezone})</p>
-                    <p>Please be prepared and ready for your match. Good luck!</p>
+                    <p>${texts.greeting} ${participant.name},</p>
+                    <p>${texts.reminderText} <strong>${tournament.name}</strong> ${texts.startingSoon}</p>
+                    <p><strong>${texts.startDate}</strong> ${formattedDate}</p>
+                    <p><strong>${texts.startTime}</strong> ${formattedTime} (${tournament.timezone})</p>
+                    <p>${texts.goodLuck}</p>
                 </div>
                 <div class="footer">
-                    <p>This is an automated reminder from The Game Company.</p>
+                    <p>${texts.footer}</p>
                 </div>
             </div>
         </body>
@@ -48,4 +66,16 @@ const generateReminderEmail = (participant, tournament) => {
     `;
 };
 
-module.exports = { generateReminderEmail };
+/**
+ * Gets the email subject for a tournament reminder based on language
+ * @param {string} language - The participant's language
+ * @param {object} tournament - The tournament object
+ * @returns {string} - The email subject
+ */
+const getReminderEmailSubject = (language, tournament) => {
+    const lang = language?.toLowerCase() || 'english';
+    const texts = emailTexts[lang] || emailTexts.english;
+    return `${texts.subject}: ${tournament.name}`;
+};
+
+module.exports = { generateReminderEmail, getReminderEmailSubject };
