@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const config = {
     port: process.env.PORT || 3000,
-    apiBaseUrl: process.env.API_BASE_URL || 'https://endpoint.thegamecompany.ai',
+    apiBaseUrl: process.env.API_BASE_URL || 'https://backend.thegamecompany.ai',
     userApiBaseUrl: process.env.USER_API_BASE_URL || 'https://endpoint.thegamecompany.ai',
     email: {
         host: process.env.EMAIL_HOST,

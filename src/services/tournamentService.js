@@ -8,10 +8,20 @@ const REGISTRATIONS_ENDPOINT = '/api/services/app/TournamentRegistration/GetAllF
 const USERS_ENDPOINT = '/api/services/app/User/GetAll';
 const AUTH_ENDPOINT = '/api/TokenAuth/Authenticate';
 
+// Token cache to avoid repeated authentication
+let cachedToken = null;
+let tokenExpiry = null;
+
 // Authenticate and get fresh token for user API calls
 const authenticateAndGetToken = async () => {
     try {
+        // Check if we have a valid cached token (with 5 minute buffer)
+        if (cachedToken && tokenExpiry && Date.now() < (tokenExpiry - 5 * 60 * 1000)) {
+            return cachedToken;
+        }
+
         console.log('🔐 Authenticating to get fresh token...');
+        
         const response = await axios.post(`${config.userApiBaseUrl}${AUTH_ENDPOINT}`, {
             userNameOrEmailAddress: 'AR002@mailinator.com',
             password: 'Test@12345'
@@ -19,23 +29,31 @@ const authenticateAndGetToken = async () => {
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json, text/plain, */*'
-            }
+            },
+            timeout: 15000 // 15 second timeout for auth
         });
 
         if (!response.data || !response.data.result || !response.data.result.accessToken) {
             throw new Error('Invalid authentication response - no access token received.');
         }
 
-        console.log('✅ Authentication successful - received fresh token');
-        return response.data.result.accessToken;
+        // Cache the token (assuming 1 hour validity, we'll refresh before that)
+        cachedToken = response.data.result.accessToken;
+        tokenExpiry = Date.now() + (60 * 60 * 1000); // 1 hour from now
+
+        console.log('✅ Authentication successful - token cached');
+        return cachedToken;
 
     } catch (error) {
+        // Clear cached token on auth failure
+        cachedToken = null;
+        tokenExpiry = null;
+        
         console.error('🚨 Authentication failed:', error.message);
         if (error.response) {
             console.error('Auth Error Details:', {
                 status: error.response.status,
-                statusText: error.response.statusText,
-                data: error.response.data
+                statusText: error.response.statusText
             });
         }
         throw new Error('Could not authenticate to get access token.');
@@ -48,7 +66,8 @@ const createAuthenticatedRequestForUsers = async () => {
     return axios.create({
         headers: {
             'Authorization': `Bearer ${token}`
-        }
+        },
+        timeout: 60000 // 60 second timeout for user requests
     });
 };
 
@@ -158,64 +177,104 @@ const filterRecentTournaments = (tournaments) => {
 };
 
 const fetchAllUsers = async () => {
+    const batchSize = 100; // Batch size for pagination - increased to 100
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    
     try {
-        console.log('Fetching all users with mailinator keyword from external API...');
+        console.log('🚀 Fetching all users with mailinator keyword...');
         
         const authenticatedAxios = await createAuthenticatedRequestForUsers();
-        let allUsers = [];
-        let skipCount = 0;
-        const maxResultCount = 20;
-        let hasMoreUsers = true;
+        
+        const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
+        const requestParams = {
+            keyword: 'mailinator'
+            // SkipCount: skipCount, // Commented out - no pagination
+            // MaxResultCount: batchSize // Commented out - no batching
+        };
+        
+        console.log(`📥 Fetching all users with keyword: mailinator`);
+        const startTime = Date.now();
+        
+        // Single request logic - using keyword only
+        const response = await authenticatedAxios.get(requestUrl, {
+            params: requestParams
+        });
 
-        while (hasMoreUsers) {
-            console.log(`🔍 Fetching users batch: SkipCount=${skipCount}, MaxResultCount=${maxResultCount}`);
-            
-            const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
-            const requestParams = {
-                keyword: 'mailinator',
-                SkipCount: skipCount,
-                MaxResultCount: maxResultCount
-            };
-            
-            console.log('🔍 DEBUG - Request URL:', requestUrl);
-            console.log('🔍 DEBUG - Request Params:', requestParams);
-            
-            const response = await authenticatedAxios.get(requestUrl, {
-                params: requestParams
-            });
-
-            if (!response.data || !response.data.result) {
-                throw new Error('Invalid API response format from users endpoint.');
-            }
-
-            const users = response.data.result.items || response.data.result;
-            if (!Array.isArray(users)) {
-                throw new Error('Expected users array in API response.');
-            }
-
-            allUsers = allUsers.concat(users);
-            
-            // If we got fewer users than maxResultCount, we've reached the end
-            hasMoreUsers = users.length === maxResultCount;
-            skipCount += maxResultCount;
-            
-            console.log(`📊 Fetched ${users.length} users in this batch. Total so far: ${allUsers.length}`);
+        if (!response.data || !response.data.result) {
+            throw new Error('Invalid API response format from users endpoint.');
         }
 
-        console.log(`✅ Successfully fetched ${allUsers.length} total users with mailinator keyword.`);
-        return allUsers;
+        const users = response.data.result.items || response.data.result;
+        
+        if (!Array.isArray(users)) {
+            throw new Error('Expected users array in API response.');
+        }
+
+        const elapsed = Date.now() - startTime;
+        console.log(`✅ Fetched ${users.length} users in ${elapsed}ms`);
+
+        console.log(`🎉 Successfully fetched ${users.length} total users`);
+        return users;
+
+        // Commented out pagination logic
+        // let allUsers = [];
+        // let skipCount = 0;
+        // let hasMoreUsers = true;
+        // let totalFetched = 0;
+
+        // while (hasMoreUsers) {
+        //     console.log(`📥 Fetching batch: Skip=${skipCount}, Size=${batchSize}`);
+        //     
+        //     const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
+        //     const requestParams = {
+        //         keyword: 'mailinator',
+        //         SkipCount: skipCount,
+        //         MaxResultCount: batchSize
+        //     };
+        //     
+        //     const startTime = Date.now();
+        //     
+        //     const response = await authenticatedAxios.get(requestUrl, {
+        //         params: requestParams
+        //     });
+
+        //     if (!response.data || !response.data.result) {
+        //         throw new Error('Invalid API response format from users endpoint.');
+        //     }
+
+        //     const users = response.data.result.items || response.data.result;
+        //     
+        //     if (!Array.isArray(users)) {
+        //         throw new Error('Expected users array in API response.');
+        //     }
+
+        //     allUsers = allUsers.concat(users);
+        //     totalFetched += users.length;
+        //     
+        //     const elapsed = Date.now() - startTime;
+        //     console.log(`✅ Fetched ${users.length} users in ${elapsed}ms. Total: ${totalFetched}`);
+        //     
+        //     // Check if we've reached the end
+        //     hasMoreUsers = users.length === batchSize;
+        //     skipCount += batchSize;
+        //     
+        //     // Brief pause between batches to reduce server load
+        //     if (hasMoreUsers) {
+        //         await sleep(1000); // 1 second pause
+        //     }
+        // }
+
+        // console.log(`🎉 Successfully fetched ${totalFetched} total users`);
+        // return allUsers;
 
     } catch (error) {
-        console.error('🚨 ERROR Details:', {
+        console.error('🚨 User fetch failed:', {
             message: error.message,
+            code: error.code,
             status: error.response?.status,
-            statusText: error.response?.statusText,
-            responseData: error.response?.data,
-            requestUrl: error.config?.url,
-            requestHeaders: error.config?.headers
+            url: error.config?.url
         });
-        console.error('Error fetching users from external API:', error.message);
-        throw new Error('Could not fetch user data from the external source.');
+        throw new Error(`Failed to fetch users: ${error.message}`);
     }
 };
 

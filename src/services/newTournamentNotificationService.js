@@ -8,6 +8,8 @@ const sendNewTournamentNotifications = async () => {
         // Clean up old tracking entries first
         emailTrackingService.cleanupOldEntries();
 
+        console.log('🏆 Starting tournament notification process...');
+
         // 1. Fetch all tournaments (ONCE)
         const allTournaments = await tournamentService.fetchAllTournaments();
 
@@ -57,17 +59,27 @@ const sendNewTournamentNotifications = async () => {
 
         console.log(`🎯 Found ${openRegistrationTournaments.length} tournament(s) with open registration`);
 
-        // 3. Fetch all users (ONCE)
+        // 3. Fetch all users (ONCE) using the optimized method
         const allUsers = await tournamentService.fetchAllUsers();
         
         // 4. Process users and extract language preference from about field
         const processedUsers = allUsers
             .filter(user => user.emailAddress && user.isActive)
-            .map(user => ({
-                email: user.emailAddress,
-                name: user.name || user.fullName || 'Gamer',
-                language: user.about === 'ar' ? 'arabic' : user.about === 'en' ? 'english' : 'arabic' // Default to Arabic if not specified
-            }));
+            .map(user => {
+                // Language processing: 'ar' -> 'arabic', 'en' -> 'english', default to 'arabic'
+                let language = 'arabic'; // Default
+                if (user.about === 'en') {
+                    language = 'english';
+                } else if (user.about === 'ar') {
+                    language = 'arabic';
+                }
+                
+                return {
+                    email: user.emailAddress,
+                    name: user.name || user.fullName || 'Gamer',
+                    language: language
+                };
+            });
 
         // Remove duplicates based on email
         const uniqueUsers = [...new Map(
@@ -78,7 +90,7 @@ const sendNewTournamentNotifications = async () => {
             return { success: true, message: 'No active users to notify.' };
         }
 
-        console.log(`👥 Found ${uniqueUsers.length} unique active users to notify`);
+        console.log(`👥 Processing ${uniqueUsers.length} unique active users`);
 
         let totalEmailsSent = 0;
         let emailsSkipped = 0;
@@ -92,25 +104,42 @@ const sendNewTournamentNotifications = async () => {
                     continue;
                 }
 
-                console.log(`📧 Sending notifications for tournament: ${tournament.name}`);
+                console.log(`📧 Sending notifications for: ${tournament.name}`);
                 
                 let tournamentEmailsSent = 0;
+                const emailBatch = [];
+
+                // Prepare all emails for this tournament
                 for (const user of uniqueUsers) {
                     try {
                         // Generate personalized email using bilingual template
                         const emailHtml = generateNewTournamentEmail(tournament, user, user.language);
                         const emailSubject = getNewTournamentEmailSubject(user.language, tournament);
 
-                        await emailService.sendEmail(
-                            user.email,
-                            emailSubject,
-                            emailHtml
-                        );
-
-                        tournamentEmailsSent++;
+                        emailBatch.push({
+                            to: user.email,
+                            subject: emailSubject,
+                            html: emailHtml
+                        });
 
                     } catch (error) {
-                        // Continue to next user even if one fails
+                        console.error(`Failed to prepare email for ${user.email}:`, error.message);
+                    }
+                }
+
+                // Send emails in batches
+                for (const email of emailBatch) {
+                    try {
+                        await emailService.sendEmail(email.to, email.subject, email.html);
+                        tournamentEmailsSent++;
+                        
+                        // Small delay between emails to avoid overwhelming the email service
+                        if (tournamentEmailsSent % 10 === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 500)); // 0.5s pause every 10 emails
+                        }
+                        
+                    } catch (error) {
+                        console.error(`Failed to send email to ${email.to}:`, error.message);
                     }
                 }
 
@@ -125,16 +154,25 @@ const sendNewTournamentNotifications = async () => {
                 console.log(`✅ Sent ${tournamentEmailsSent} notifications for: ${tournament.name}`);
 
             } catch (error) {
-                // Continue to next tournament even if one fails
+                console.error(`Failed processing tournament ${tournament.name}:`, error.message);
             }
         }
 
-        const summary = `Notification process complete. Total emails sent: ${totalEmailsSent}. Emails skipped: ${emailsSkipped}.`;
+        const summary = `✨ Notification process complete. Total emails sent: ${totalEmailsSent}. Emails skipped: ${emailsSkipped}.`;
         console.log(summary);
-        return { success: true, message: summary, emailsSent: totalEmailsSent, emailsSkipped };
+        
+        return { 
+            success: true, 
+            message: summary, 
+            emailsSent: totalEmailsSent, 
+            emailsSkipped: emailsSkipped,
+            tournamentsProcessed: openRegistrationTournaments.length,
+            usersProcessed: uniqueUsers.length
+        };
 
     } catch (error) {
-        throw new Error('Failed to send new tournament notifications.');
+        console.error('🚨 Tournament notification process failed:', error.message);
+        throw new Error(`Failed to send new tournament notifications: ${error.message}`);
     }
 };
 
