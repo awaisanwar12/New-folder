@@ -61,10 +61,20 @@ const sendNewTournamentNotifications = async () => {
                 const hasRegistrationNotEnded = currentTime <= registrationClose;
                 console.log(`Has registration not ended? ${hasRegistrationNotEnded} (Current: ${currentTime.toLocaleString()} <= Close: ${registrationClose.toLocaleString()})`);
                 
-                // Both conditions must be true for registration to be open
+                                // Both conditions must be true for registration to be open
                 const isRegistrationOpen = hasRegistrationStarted && hasRegistrationNotEnded;
                 
-               
+                if (isRegistrationOpen) {
+                    console.log(`✅ Tournament ${tournament.name} - Registration is OPEN and enabled`);
+                    return true;  // ← IMPORTANT: This tells the filter to INCLUDE this tournament
+                } else {
+                    if (!hasRegistrationStarted) {
+                        console.log(`❌ Skipping tournament ${tournament.name} - Registration has not started yet`);
+                    } else {
+                        console.log(`❌ Skipping tournament ${tournament.name} - Registration has ended`);
+                    }
+                    return false;  // ← IMPORTANT: This tells the filter to EXCLUDE this tournament
+                }
                 
             } catch (error) {
                 console.error(`❌ Error checking registration status for tournament ${tournament.name}:`, error);
@@ -73,7 +83,7 @@ const sendNewTournamentNotifications = async () => {
         });
 
         if (openRegistrationTournaments.length === 0) {
-            // console.log('No tournaments with open registration found. No notifications to send.');
+            console.log('No tournaments with open registration found. No notifications to send.');
             return { success: true, message: 'No tournaments with open registration.' };
         }
 
@@ -89,7 +99,7 @@ const sendNewTournamentNotifications = async () => {
                 .map(reg => [reg.email, {
                     email: reg.email,
                     name: reg.name || reg.username || 'Gamer',
-                    language: reg.language || 'english'
+                    language: reg.language || 'arabic'
                 }])
         ).values()];
 
@@ -118,8 +128,8 @@ const sendNewTournamentNotifications = async () => {
                 let tournamentEmailsSent = 0;
                 for (const user of mailinatorUsers) {
                     try {
-                        // Set language to English by default if not already English
-                        if (!user.language || user.language.toLowerCase() !== 'english') {
+                        // Set language to Arabic by default if not already Arabic
+                        if (!user.language || user.language.toLowerCase() !== 'arabic') {
                             user.language = 'arabic';
                         }
 
