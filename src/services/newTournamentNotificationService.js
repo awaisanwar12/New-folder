@@ -9,33 +9,76 @@ const sendNewTournamentNotifications = async () => {
         // Clean up old tracking entries first
         emailTrackingService.cleanupOldEntries();
 
-        // 1. Fetch all tournaments and filter for those created recently
+        // 1. Fetch all tournaments (not just recent ones)
         const allTournaments = await tournamentService.fetchAllTournaments();
-        const recentTournaments = tournamentService.filterRecentTournaments(allTournaments);
 
-        if (recentTournaments.length === 0) {
-            console.log('No recently created tournaments found. No notifications to send.');
-            return { success: true, message: 'No new tournaments.' };
+        if (allTournaments.length === 0) {
+            console.log('No tournaments found. No notifications to send.');
+            return { success: true, message: 'No tournaments found.' };
         }
+
+        console.log(`Found ${allTournaments.length} total tournament(s). Checking registration status...`);
 
         // 2. Filter tournaments to only those with open registration
         const currentTime = new Date();
-        const openRegistrationTournaments = recentTournaments.filter(tournament => {
+        console.log(`Current time: ${currentTime.toLocaleString()}`);
+        
+        const openRegistrationTournaments = allTournaments.filter(tournament => {
             try {
+                console.log(`\n--- Checking Tournament: ${tournament.name} (ID: ${tournament.tournament_ID}) ---`);
+                
+                // First check if registration is enabled
+                console.log(`Registration enabled: ${tournament.registration_enabled}`);
+                if (!tournament.registration_enabled) {
+                    console.log(`❌ Skipping tournament ${tournament.name} - Registration not enabled`);
+                    return false;
+                }
+
+                // Check if registration dates are provided
+                if (!tournament.registration_opening_datetime || !tournament.registration_closing_datetime) {
+                    console.log(`❌ Skipping tournament ${tournament.name} - Missing registration dates (Open: ${tournament.registration_opening_datetime}, Close: ${tournament.registration_closing_datetime})`);
+                    return false;
+                }
+
+                // Parse the dates (format: "3/30/2025 5:17:00 PM")
                 const registrationOpen = new Date(tournament.registration_opening_datetime);
                 const registrationClose = new Date(tournament.registration_closing_datetime);
                 
-                // Check if current time is between registration open and close dates
-                const isRegistrationOpen = currentTime >= registrationOpen && currentTime <= registrationClose;
+                console.log(`Registration opens: ${registrationOpen.toLocaleString()} (${tournament.registration_opening_datetime})`);
+                console.log(`Registration closes: ${registrationClose.toLocaleString()} (${tournament.registration_closing_datetime})`);
                 
-                if (!isRegistrationOpen) {
-                    console.log(`Skipping tournament ${tournament.name} - Registration not open (Opens: ${tournament.registration_opening_datetime}, Closes: ${tournament.registration_closing_datetime})`);
+                // Check if dates are valid
+                if (isNaN(registrationOpen.getTime()) || isNaN(registrationClose.getTime())) {
+                    console.log(`❌ Skipping tournament ${tournament.name} - Invalid date format`);
+                    return false;
                 }
                 
-                return isRegistrationOpen;
+                // Check if current time is after registration opening
+                const hasRegistrationStarted = currentTime >= registrationOpen;
+                console.log(`Has registration started? ${hasRegistrationStarted} (Current: ${currentTime.toLocaleString()} >= Open: ${registrationOpen.toLocaleString()})`);
+                
+                // Check if current time is before registration closing
+                const hasRegistrationNotEnded = currentTime <= registrationClose;
+                console.log(`Has registration not ended? ${hasRegistrationNotEnded} (Current: ${currentTime.toLocaleString()} <= Close: ${registrationClose.toLocaleString()})`);
+                
+                // Both conditions must be true for registration to be open
+                const isRegistrationOpen = hasRegistrationStarted && hasRegistrationNotEnded;
+                
+                if (isRegistrationOpen) {
+                    console.log(`✅ Tournament ${tournament.name} - Registration is OPEN and enabled`);
+                    return true;
+                } else {
+                    if (!hasRegistrationStarted) {
+                        console.log(`❌ Skipping tournament ${tournament.name} - Registration has not started yet`);
+                    } else {
+                        console.log(`❌ Skipping tournament ${tournament.name} - Registration has ended`);
+                    }
+                    return false;
+                }
+                
             } catch (error) {
-                console.error(`Error checking registration dates for tournament ${tournament.name}:`, error);
-                return false; // Skip tournaments with invalid dates
+                console.error(`❌ Error checking registration status for tournament ${tournament.name}:`, error);
+                return false; // Skip tournaments with invalid data
             }
         });
 
@@ -44,7 +87,7 @@ const sendNewTournamentNotifications = async () => {
             return { success: true, message: 'No tournaments with open registration.' };
         }
 
-        console.log(`Found ${openRegistrationTournaments.length} tournament(s) with open registration (filtered ${recentTournaments.length - openRegistrationTournaments.length} with closed registration).`);
+        console.log(`\n🎯 RESULT: Found ${openRegistrationTournaments.length} tournament(s) with open registration (filtered ${allTournaments.length - openRegistrationTournaments.length} with closed/disabled registration).`);
 
         // 3. Fetch all registered users
         const allRegistrations = await tournamentService.fetchAllRegistrations();
