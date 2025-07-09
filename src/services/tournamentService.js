@@ -5,11 +5,23 @@ const config = require('../config/environment');
 const TOURNAMENTS_ENDPOINT = '/api/services/app/Tournament/GetAllTournamentsFromDB';
 const PARTICIPANTS_ENDPOINT = '/api/services/app/Participants/GetParticipantsByTournamentIdFromDB';
 const REGISTRATIONS_ENDPOINT = '/api/services/app/TournamentRegistration/GetAllFromDB';
+const USERS_ENDPOINT = '/api/services/app/User/GetAll';
+
+// Create authenticated axios instance
+const createAuthenticatedRequest = () => {
+    return axios.create({
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.api.bearerToken}`
+        }
+    });
+};
 
 const fetchAllTournaments = async () => {
     try {
         console.log('Fetching tournaments from external API...');
-        const response = await axios.get(`${config.apiBaseUrl}${TOURNAMENTS_ENDPOINT}`);
+        const authenticatedAxios = createAuthenticatedRequest();
+        const response = await authenticatedAxios.get(`${config.apiBaseUrl}${TOURNAMENTS_ENDPOINT}`);
         if (!response.data || !response.data.result) {
             throw new Error('Invalid API response format from external source.');
         }
@@ -69,7 +81,8 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
     }
     try {
         console.log(`Fetching participants for tournament ID: ${tournamentId}`);
-        const response = await axios.get(`${config.apiBaseUrl}${PARTICIPANTS_ENDPOINT}`, {
+        const authenticatedAxios = createAuthenticatedRequest();
+        const response = await authenticatedAxios.get(`${config.apiBaseUrl}${PARTICIPANTS_ENDPOINT}`, {
             params: { tournamentId }
         });
         if (response.data && response.data.result) {
@@ -85,7 +98,8 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
 const fetchAllRegistrations = async () => {
     try {
         console.log('Fetching all registrations from DB...');
-        const response = await axios.get(`${config.apiBaseUrl}${REGISTRATIONS_ENDPOINT}`);
+        const authenticatedAxios = createAuthenticatedRequest();
+        const response = await authenticatedAxios.get(`${config.apiBaseUrl}${REGISTRATIONS_ENDPOINT}`);
         if (response.data && response.data.result && Array.isArray(response.data.result.items)) {
             return response.data.result.items;
         }
@@ -118,10 +132,57 @@ const filterRecentTournaments = (tournaments) => {
     });
 };
 
+const fetchAllUsers = async () => {
+    try {
+        console.log('Fetching all users with mailinator keyword from external API...');
+        
+        const authenticatedAxios = createAuthenticatedRequest();
+        const requestUrl = `${config.apiBaseUrl}${USERS_ENDPOINT}`;
+        const requestParams = {
+            keyword: 'mailinator'  // Only keyword parameter to match Postman exactly
+        };
+        
+        // Debug logging
+        console.log('🔍 DEBUG - Request URL:', requestUrl);
+        console.log('🔍 DEBUG - Request Params:', requestParams);
+        console.log('🔍 DEBUG - Bearer Token (first 50 chars):', config.api.bearerToken.substring(0, 50) + '...');
+        console.log('🔍 DEBUG - Full Request Headers:', authenticatedAxios.defaults.headers);
+        
+        const response = await authenticatedAxios.get(requestUrl, {
+            params: requestParams
+        });
+
+        if (!response.data || !response.data.result) {
+            throw new Error('Invalid API response format from users endpoint.');
+        }
+
+        const users = response.data.result.items || response.data.result;
+        if (!Array.isArray(users)) {
+            throw new Error('Expected users array in API response.');
+        }
+
+        console.log(`Successfully fetched ${users.length} users with mailinator keyword.`);
+        return users;
+
+    } catch (error) {
+        console.error('🚨 ERROR Details:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            responseData: error.response?.data,
+            requestUrl: error.config?.url,
+            requestHeaders: error.config?.headers
+        });
+        console.error('Error fetching users from external API:', error.message);
+        throw new Error('Could not fetch user data from the external source.');
+    }
+};
+
 module.exports = {
     fetchAllTournaments,
     filterTournaments,
     fetchParticipantsByTournamentId,
     fetchAllRegistrations,
     filterRecentTournaments,
+    fetchAllUsers,
 };

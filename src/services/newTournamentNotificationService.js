@@ -89,26 +89,29 @@ const sendNewTournamentNotifications = async () => {
 
         console.log(`\n🎯 RESULT: Found ${openRegistrationTournaments.length} tournament(s) with open registration (filtered ${allTournaments.length - openRegistrationTournaments.length} with closed/disabled registration).`);
 
-        // 3. Fetch all registered users
-        const allRegistrations = await tournamentService.fetchAllRegistrations();
+        // 3. Fetch all users with mailinator keyword from the new API
+        const allUsers = await tournamentService.fetchAllUsers();
         
-        // 4. Filter for unique @mailinator.com users
-        const mailinatorUsers = [...new Map(
-            allRegistrations
-                .filter(reg => reg.email && reg.email.toLowerCase().endsWith('@mailinator.com'))
-                .map(reg => [reg.email, {
-                    email: reg.email,
-                    name: reg.name || reg.username || 'Gamer',
-                    language: reg.language || 'arabic'
-                }])
+        // 4. Process users and extract language preference from about field
+        const processedUsers = allUsers
+            .filter(user => user.emailAddress && user.isActive)
+            .map(user => ({
+                email: user.emailAddress,
+                name: user.name || user.fullName || 'Gamer',
+                language: user.about === 'ar' ? 'arabic' : user.about === 'en' ? 'english' : 'arabic' // Default to Arabic if not specified
+            }));
+
+        // Remove duplicates based on email
+        const uniqueUsers = [...new Map(
+            processedUsers.map(user => [user.email, user])
         ).values()];
 
-        if (mailinatorUsers.length === 0) {
-            console.log('No @mailinator.com users found to notify.');
-            return { success: true, message: 'No @mailinator.com users to notify.' };
+        if (uniqueUsers.length === 0) {
+            console.log('No active users found to notify.');
+            return { success: true, message: 'No active users to notify.' };
         }
 
-        console.log(`Found ${mailinatorUsers.length} unique @mailinator.com users to notify.`);
+        console.log(`Found ${uniqueUsers.length} unique active users to notify.`);
 
         let totalEmailsSent = 0;
         let emailsSkipped = 0;
@@ -126,13 +129,8 @@ const sendNewTournamentNotifications = async () => {
                 console.log(`Preparing notification for new tournament: ${tournament.name}`);
                 
                 let tournamentEmailsSent = 0;
-                for (const user of mailinatorUsers) {
+                for (const user of uniqueUsers) {
                     try {
-                        // Set language to Arabic by default if not already Arabic
-                        if (!user.language || user.language.toLowerCase() !== 'arabic') {
-                            user.language = 'arabic';
-                        }
-
                         // Generate personalized email using bilingual template
                         const emailHtml = generateNewTournamentEmail(tournament, user, user.language);
                         const emailSubject = getNewTournamentEmailSubject(user.language, tournament);
@@ -144,7 +142,7 @@ const sendNewTournamentNotifications = async () => {
                         );
 
                         tournamentEmailsSent++;
-                        console.log(`Sent new tournament notification to: ${user.email} for tournament: ${tournament.name}`);
+                        console.log(`Sent new tournament notification to: ${user.email} for tournament: ${tournament.name} (Language: ${user.language})`);
 
                     } catch (error) {
                         console.error(`Failed to send email to ${user.email}:`, error.message);
@@ -155,7 +153,7 @@ const sendNewTournamentNotifications = async () => {
                 // Mark email as sent to prevent duplicates
                 emailTrackingService.markEmailAsSent(tournament.tournament_ID, 'new_tournament', {
                     tournamentName: tournament.name,
-                    userCount: mailinatorUsers.length,
+                    userCount: uniqueUsers.length,
                     emailsSent: tournamentEmailsSent
                 });
 
