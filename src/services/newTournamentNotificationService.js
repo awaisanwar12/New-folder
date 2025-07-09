@@ -64,17 +64,7 @@ const sendNewTournamentNotifications = async () => {
                 // Both conditions must be true for registration to be open
                 const isRegistrationOpen = hasRegistrationStarted && hasRegistrationNotEnded;
                 
-                if (isRegistrationOpen) {
-                    console.log(`✅ Tournament ${tournament.name} - Registration is OPEN and enabled`);
-                    return true;
-                } else {
-                    if (!hasRegistrationStarted) {
-                        console.log(`❌ Skipping tournament ${tournament.name} - Registration has not started yet`);
-                    } else {
-                        console.log(`❌ Skipping tournament ${tournament.name} - Registration has ended`);
-                    }
-                    return false;
-                }
+               
                 
             } catch (error) {
                 console.error(`❌ Error checking registration status for tournament ${tournament.name}:`, error);
@@ -83,7 +73,7 @@ const sendNewTournamentNotifications = async () => {
         });
 
         if (openRegistrationTournaments.length === 0) {
-            console.log('No tournaments with open registration found. No notifications to send.');
+            // console.log('No tournaments with open registration found. No notifications to send.');
             return { success: true, message: 'No tournaments with open registration.' };
         }
 
@@ -130,7 +120,7 @@ const sendNewTournamentNotifications = async () => {
                     try {
                         // Set language to English by default if not already English
                         if (!user.language || user.language.toLowerCase() !== 'english') {
-                            user.language = 'english';
+                            user.language = 'arabic';
                         }
 
                         // Generate personalized email using bilingual template
