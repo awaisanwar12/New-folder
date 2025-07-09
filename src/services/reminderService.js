@@ -9,16 +9,16 @@ const sendTournamentReminders = async () => {
         // Clean up old tracking entries first
         emailTrackingService.cleanupOldEntries();
 
-        // 1. Fetch all tournaments and filter for those starting soon
+        // 1. Fetch all tournaments and filter for those starting today (in their timezone)
         const allTournaments = await tournamentService.fetchAllTournaments();
         const { startingToday } = tournamentService.filterTournaments(allTournaments);
 
         if (startingToday.length === 0) {
-            console.log('No tournaments starting soon. No reminders to send.');
-            return { success: true, message: 'No tournaments starting soon.' };
+            console.log('No tournaments starting today. No reminders to send.');
+            return { success: true, message: 'No tournaments starting today.' };
         }
 
-        console.log(`Found ${startingToday.length} tournament(s) starting soon.`);
+        console.log(`Found ${startingToday.length} tournament(s) starting today.`);
         let emailsSent = 0;
         let emailsSkipped = 0;
         let participantsFiltered = 0;
@@ -26,6 +26,31 @@ const sendTournamentReminders = async () => {
         // 2. For each tournament, get participants and send emails
         for (const tournament of startingToday) {
             try {
+                // Debug timezone information
+                const startDateString = tournament.full_name.split(',')[0];
+                const startDate = new Date(startDateString);
+                const now = new Date();
+                const hoursRemaining = Math.round((startDate - now) / (1000 * 60 * 60) * 10) / 10;
+                
+                console.log(`\n=== Processing Tournament: ${tournament.name} ===`);
+                console.log(`Tournament ID: ${tournament.tournament_ID}`);
+                console.log(`Tournament timezone: ${tournament.timezone}`);
+                console.log(`Start time (UTC): ${startDate.toISOString()}`);
+                console.log(`Current time (UTC): ${now.toISOString()}`);
+                console.log(`Hours remaining: ${hoursRemaining}`);
+                
+                // Show times in tournament timezone if possible
+                try {
+                    const { utcToZonedTime } = require('date-fns-tz');
+                    const tournamentTZ = tournament.timezone || 'UTC';
+                    const startInTZ = utcToZonedTime(startDate, tournamentTZ);
+                    const nowInTZ = utcToZonedTime(now, tournamentTZ);
+                    console.log(`Start time (${tournamentTZ}): ${startInTZ}`);
+                    console.log(`Current time (${tournamentTZ}): ${nowInTZ}`);
+                } catch (error) {
+                    console.log(`Could not show timezone info: ${error.message}`);
+                }
+
                 // Check if reminder already sent for this tournament today
                 if (emailTrackingService.hasEmailBeenSent(tournament.tournament_ID, 'reminder')) {
                     console.log(`Reminder already sent today for tournament: ${tournament.name} (ID: ${tournament.tournament_ID})`);
@@ -39,9 +64,21 @@ const sendTournamentReminders = async () => {
                     continue;
                 }
 
-                // Set language to English by default if not already English
+                // Map custom_user_identifier to language for email templates
                 participants.forEach(participant => {
-                    if (!participant.language || participant.language.toLowerCase() !== 'english') {
+                    // Map custom_user_identifier ("en"/"ar") to language ("english"/"arabic")
+                    if (participant.custom_user_identifier) {
+                        switch (participant.custom_user_identifier.toLowerCase()) {
+                            case 'ar':
+                                participant.language = 'arabic';
+                                break;
+                            case 'en':
+                            default:
+                                participant.language = 'english';
+                                break;
+                        }
+                    } else {
+                        // Default to English if custom_user_identifier is not set
                         participant.language = 'english';
                     }
                 });
@@ -58,7 +95,14 @@ const sendTournamentReminders = async () => {
                     continue;
                 }
 
+                // Count participants by language for logging
+                const languageCount = mailinatorParticipants.reduce((acc, participant) => {
+                    acc[participant.language] = (acc[participant.language] || 0) + 1;
+                    return acc;
+                }, {});
+
                 console.log(`Found ${mailinatorParticipants.length} @mailinator.com participants for tournament: ${tournament.name} (filtered ${participants.length - mailinatorParticipants.length} non-mailinator emails)`);
+                console.log(`Language distribution: ${Object.entries(languageCount).map(([lang, count]) => `${lang}: ${count}`).join(', ')}`);
 
                 // 3. Send individual emails to each participant
                 let tournamentEmailsSent = 0;
@@ -75,7 +119,7 @@ const sendTournamentReminders = async () => {
                         );
 
                         tournamentEmailsSent++;
-                        console.log(`Sent reminder email to: ${participant.email} for tournament: ${tournament.name}`);
+                        console.log(`Sent reminder email to: ${participant.email} (${participant.language}) for tournament: ${tournament.name}`);
 
                     } catch (error) {
                         console.error(`Failed to send email to ${participant.email}:`, error.message);

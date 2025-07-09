@@ -1,5 +1,6 @@
 const axios = require('axios');
-const { parseISO, isBefore, isAfter, isToday, addHours, isValid, subHours } = require('date-fns');
+const { parseISO, isBefore, isAfter, isToday, addHours, isValid, subHours, isSameDay } = require('date-fns');
+const { utcToZonedTime } = require('date-fns-tz');
 const config = require('../config/environment');
 
 const TOURNAMENTS_ENDPOINT = '/api/services/app/Tournament/GetAllTournamentsFromDB';
@@ -119,7 +120,25 @@ const filterTournaments = (tournaments) => {
         if (!isValid(startDate)) return false;
 
         const eightHoursFromNow = addHours(now, 8);
-        return isToday(startDate) && isAfter(startDate, now) && isBefore(startDate, eightHoursFromNow);
+        
+        // Check if tournament starts "today" in the tournament's timezone
+        const tournamentTimezone = t.timezone || 'UTC';
+        let isTodayInTournamentTZ = false;
+        
+        try {
+            // Convert current time and start time to tournament's timezone
+            const nowInTournamentTZ = utcToZonedTime(now, tournamentTimezone);
+            const startDateInTournamentTZ = utcToZonedTime(startDate, tournamentTimezone);
+            
+            // Check if they are on the same calendar day in tournament's timezone
+            isTodayInTournamentTZ = isSameDay(nowInTournamentTZ, startDateInTournamentTZ);
+        } catch (error) {
+            // Fallback to UTC timezone if tournament timezone is invalid
+            console.warn(`Invalid timezone '${tournamentTimezone}' for tournament ${t.name}, using UTC`);
+            isTodayInTournamentTZ = isToday(startDate);
+        }
+        
+        return isTodayInTournamentTZ && isAfter(startDate, now) && isBefore(startDate, eightHoursFromNow);
     });
 
     return { upcoming, startingToday };
