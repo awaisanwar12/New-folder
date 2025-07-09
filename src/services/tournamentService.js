@@ -6,12 +6,48 @@ const TOURNAMENTS_ENDPOINT = '/api/services/app/Tournament/GetAllTournamentsFrom
 const PARTICIPANTS_ENDPOINT = '/api/services/app/Participants/GetParticipantsByTournamentIdFromDB';
 const REGISTRATIONS_ENDPOINT = '/api/services/app/TournamentRegistration/GetAllFromDB';
 const USERS_ENDPOINT = '/api/services/app/User/GetAll';
+const AUTH_ENDPOINT = '/api/TokenAuth/Authenticate';
 
-// Create authenticated axios instance
-const createAuthenticatedRequest = () => {
+// Authenticate and get fresh token for user API calls
+const authenticateAndGetToken = async () => {
+    try {
+        console.log('🔐 Authenticating to get fresh token...');
+        const response = await axios.post(`${config.userApiBaseUrl}${AUTH_ENDPOINT}`, {
+            userNameOrEmailAddress: 'AR002@mailinator.com',
+            password: 'Test@12345'
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json, text/plain, */*'
+            }
+        });
+
+        if (!response.data || !response.data.result || !response.data.result.accessToken) {
+            throw new Error('Invalid authentication response - no access token received.');
+        }
+
+        console.log('✅ Authentication successful - received fresh token');
+        return response.data.result.accessToken;
+
+    } catch (error) {
+        console.error('🚨 Authentication failed:', error.message);
+        if (error.response) {
+            console.error('Auth Error Details:', {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data
+            });
+        }
+        throw new Error('Could not authenticate to get access token.');
+    }
+};
+
+// Create authenticated axios instance with fresh token
+const createAuthenticatedRequestForUsers = async () => {
+    const token = await authenticateAndGetToken();
     return axios.create({
         headers: {
-            'Authorization': `Bearer ${config.api.bearerToken}`
+            'Authorization': `Bearer ${token}`
         }
     });
 };
@@ -19,8 +55,7 @@ const createAuthenticatedRequest = () => {
 const fetchAllTournaments = async () => {
     try {
         console.log('Fetching tournaments from external API...');
-        const authenticatedAxios = createAuthenticatedRequest();
-        const response = await authenticatedAxios.get(`${config.apiBaseUrl}${TOURNAMENTS_ENDPOINT}`);
+        const response = await axios.get(`${config.apiBaseUrl}${TOURNAMENTS_ENDPOINT}`);
         if (!response.data || !response.data.result) {
             throw new Error('Invalid API response format from external source.');
         }
@@ -80,8 +115,7 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
     }
     try {
         console.log(`Fetching participants for tournament ID: ${tournamentId}`);
-        const authenticatedAxios = createAuthenticatedRequest();
-        const response = await authenticatedAxios.get(`${config.apiBaseUrl}${PARTICIPANTS_ENDPOINT}`, {
+        const response = await axios.get(`${config.apiBaseUrl}${PARTICIPANTS_ENDPOINT}`, {
             params: { tournamentId }
         });
         if (response.data && response.data.result) {
@@ -97,8 +131,7 @@ const fetchParticipantsByTournamentId = async (tournamentId) => {
 const fetchAllRegistrations = async () => {
     try {
         console.log('Fetching all registrations from DB...');
-        const authenticatedAxios = createAuthenticatedRequest();
-        const response = await authenticatedAxios.get(`${config.apiBaseUrl}${REGISTRATIONS_ENDPOINT}`);
+        const response = await axios.get(`${config.apiBaseUrl}${REGISTRATIONS_ENDPOINT}`);
         if (response.data && response.data.result && Array.isArray(response.data.result.items)) {
             return response.data.result.items;
         }
@@ -135,7 +168,7 @@ const fetchAllUsers = async () => {
     try {
         console.log('Fetching all users with mailinator keyword from external API...');
         
-        const authenticatedAxios = createAuthenticatedRequest();
+        const authenticatedAxios = await createAuthenticatedRequestForUsers();
         const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
         const requestParams = {
             keyword: 'mailinator'  // Only keyword parameter to match Postman exactly
@@ -144,8 +177,7 @@ const fetchAllUsers = async () => {
         // Debug logging
         console.log('🔍 DEBUG - Request URL:', requestUrl);
         console.log('🔍 DEBUG - Request Params:', requestParams);
-        console.log('🔍 DEBUG - Bearer Token (first 50 chars):', config.api.bearerToken.substring(0, 50) + '...');
-        console.log('🔍 DEBUG - Full Request Headers:', authenticatedAxios.defaults.headers);
+        console.log('🔍 DEBUG - Using fresh authentication token');
         
         const response = await authenticatedAxios.get(requestUrl, {
             params: requestParams
