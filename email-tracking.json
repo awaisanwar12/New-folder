@@ -9,6 +9,16 @@
       "tournamentName": "PUBG FFA League Test",
       "participantCount": 1,
       "emailsSent": 1
+    },
+    {
+      "key": "8868050019186909184-reminder-2025-07-10",
+      "tournamentId": "8868050019186909184",
+      "emailType": "reminder",
+      "sentAt": "2025-07-10T10:46:21.525Z",
+      "date": "2025-07-10",
+      "tournamentName": "TGC Single Tournament-A",
+      "participantCount": 19,
+      "emailsSent": 19
     }
   ]
 }
