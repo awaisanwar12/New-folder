@@ -54,10 +54,19 @@ const sendNewTournamentNotifications = async () => {
         });
 
         if (openRegistrationTournaments.length === 0) {
+            console.log('❌ No tournaments with open registration found.');
             return { success: true, message: 'No tournaments with open registration.' };
         }
 
         console.log(`🎯 Found ${openRegistrationTournaments.length} tournament(s) with open registration`);
+        
+        // Log the names of tournaments with open registration
+        if (openRegistrationTournaments.length > 0) {
+            console.log('📋 Tournaments with open registration:');
+            openRegistrationTournaments.forEach((tournament, index) => {
+                console.log(`   ${index + 1}. ${tournament.name} (ID: ${tournament.tournament_ID})`);
+            });
+        }
 
         // 3. Fetch all users (ONCE) using the optimized method
         const allUsers = await tournamentService.fetchAllUsers();
