@@ -122,7 +122,8 @@ const generateNewTournamentEmail = (tournament, user = {}, language = 'english')
         .replace(/{{joinDiscord}}/g, texts.joinDiscord)
         .replace(/{{discordUpdate}}/g, texts.discordUpdate)
         .replace(/{{unsubscribe}}/g, texts.unsubscribe)
-        .replace(/{{discordlink}}/g, 'https://discord.com/invite/7KqWgkTQ9t');
+        .replace(/{{discordlink}}/g, 'https://discord.com/invite/7KqWgkTQ9t')
+        .replace(/{{tournamentId}}/g, tournament.tournament_ID || '');
 };
 
 /**
