@@ -41,6 +41,12 @@ const generateReminderEmail = (participant, tournament) => {
     // Get language (default to English if not set)
     const language = participant.language?.toLowerCase() || 'english';
     const texts = emailTexts[language] || emailTexts.english;
+    
+    // Check if full_name exists and is not null
+    if (!tournament.full_name || typeof tournament.full_name !== 'string') {
+        throw new Error(`Tournament "${tournament.name}" has no valid full_name field`);
+    }
+    
     const startDateString = tournament.full_name.split(',')[0];
     const startDate = new Date(startDateString);
 

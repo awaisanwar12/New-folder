@@ -79,6 +79,11 @@ const generateNewTournamentEmail = (tournament, user = {}, language = 'english')
     
     let formattedDateTime = 'Date not available';
     try {
+        // Check if full_name exists and is not null
+        if (!tournament.full_name || typeof tournament.full_name !== 'string') {
+            throw new Error('Tournament full_name is null or invalid');
+        }
+        
         const startDateString = tournament.full_name.split(',')[0];
         const timeZone = tournament.timezone || 'UTC'; // Default to UTC if not provided
 

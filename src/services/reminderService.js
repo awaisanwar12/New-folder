@@ -11,6 +11,17 @@ const sendTournamentReminders = async () => {
 
         // 1. Fetch all tournaments and filter for those starting in ~8 hours (UTC)
         const allTournaments = await tournamentService.fetchAllTournaments();
+        
+        // Debug: Check if our specific tournament is in the list
+        const targetTournament = allTournaments.find(t => t.name === 'PUBG FFA League Test');
+        if (targetTournament) {
+            console.log(`🔍 Found "PUBG FFA League Test" in all tournaments list`);
+        } else {
+            console.log(`❌ "PUBG FFA League Test" NOT found in tournaments list`);
+            // Log first few tournament names to see what we have
+            console.log(`📋 First 5 tournaments found:`, allTournaments.slice(0, 5).map(t => t.name));
+        }
+        
         const tournamentsStartingIn8Hours = filterTournamentsStartingIn8Hours(allTournaments);
 
         if (tournamentsStartingIn8Hours.length === 0) {
@@ -27,6 +38,10 @@ const sendTournamentReminders = async () => {
         for (const tournament of tournamentsStartingIn8Hours) {
             try {
                 // Debug timing information (UTC only)
+                if (!tournament.full_name) {
+                    console.error(`Tournament "${tournament.name}" has no full_name field, skipping...`);
+                    continue;
+                }
                 const startDateString = tournament.full_name.split(',')[0];
                 const startDate = new Date(startDateString);
                 const now = new Date();
@@ -148,12 +163,40 @@ const filterTournamentsStartingIn8Hours = (tournaments) => {
 
     return tournaments.filter(tournament => {
         try {
+            // Debug logging for specific tournament
+            if (tournament.name === 'PUBG FFA League Test') {
+                console.log(`🔍 DEBUG - Tournament: ${tournament.name}`);
+                console.log(`🔍 DEBUG - full_name: "${tournament.full_name}"`);
+                console.log(`🔍 DEBUG - full_name type: ${typeof tournament.full_name}`);
+                console.log(`🔍 DEBUG - tournament_ID: ${tournament.tournament_ID}`);
+            }
+            
+            // Check if full_name exists and is not null
+            if (!tournament.full_name || typeof tournament.full_name !== 'string') {
+                if (tournament.name === 'PUBG FFA League Test') {
+                    console.log(`🔍 DEBUG - Skipping "${tournament.name}" - invalid full_name`);
+                }
+                return false;
+            }
+            
             const startDateString = tournament.full_name.split(',')[0];
             const startDate = new Date(startDateString);
             
             // Check if tournament starts within 30 minutes of 8 hours from now
             const timeDifference = Math.abs(startDate.getTime() - eightHoursFromNow.getTime());
             const isWithinTimeWindow = timeDifference <= tolerance;
+            
+            // Debug logging for specific tournament
+            if (tournament.name === 'PUBG FFA League Test') {
+                const hoursFromNow = (startDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                console.log(`🔍 DEBUG - Parsed start date: ${startDate.toISOString()}`);
+                console.log(`🔍 DEBUG - Current time: ${now.toISOString()}`);
+                console.log(`🔍 DEBUG - Target time (8h from now): ${eightHoursFromNow.toISOString()}`);
+                console.log(`🔍 DEBUG - Hours from now: ${hoursFromNow.toFixed(2)}`);
+                console.log(`🔍 DEBUG - Time difference from 8h mark: ${(timeDifference / (1000 * 60 * 60)).toFixed(2)} hours`);
+                console.log(`🔍 DEBUG - Tolerance: ${(tolerance / (1000 * 60 * 60)).toFixed(2)} hours`);
+                console.log(`🔍 DEBUG - Is within time window: ${isWithinTimeWindow}`);
+            }
             
             if (isWithinTimeWindow) {
                 console.log(`Tournament "${tournament.name}" starts at ${startDate.toISOString()}, which is ~8 hours from now (${eightHoursFromNow.toISOString()})`);

@@ -1,0 +1,14 @@
+{
+  "sentEmails": [
+    {
+      "key": "2245649247174856703-reminder-2025-07-10",
+      "tournamentId": "2245649247174856703",
+      "emailType": "reminder",
+      "sentAt": "2025-07-10T10:10:38.791Z",
+      "date": "2025-07-10",
+      "tournamentName": "PUBG FFA League Test",
+      "participantCount": 1,
+      "emailsSent": 1
+    }
+  ]
+}
