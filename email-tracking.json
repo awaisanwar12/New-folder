@@ -9,6 +9,56 @@
       "tournamentName": "Team Test",
       "participantCount": 1,
       "emailsSent": 1
+    },
+    {
+      "key": "2245649247174856703-new_tournament-2025-07-10",
+      "tournamentId": "2245649247174856703",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-10T06:24:16.322Z",
+      "date": "2025-07-10",
+      "tournamentName": "PUBG FFA League Test",
+      "userCount": 102,
+      "emailsSent": 102
+    },
+    {
+      "key": "2249980181405806591-new_tournament-2025-07-10",
+      "tournamentId": "2249980181405806591",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-10T06:25:33.381Z",
+      "date": "2025-07-10",
+      "tournamentName": "PUBG FFA League Test 2",
+      "userCount": 102,
+      "emailsSent": 102
+    },
+    {
+      "key": "2253791155838111743-new_tournament-2025-07-10",
+      "tournamentId": "2253791155838111743",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-10T06:26:35.734Z",
+      "date": "2025-07-10",
+      "tournamentName": "Team Test",
+      "userCount": 102,
+      "emailsSent": 102
+    },
+    {
+      "key": "2255109359992932351-new_tournament-2025-07-10",
+      "tournamentId": "2255109359992932351",
+      "emailType": "new_tournament",
+      "sentAt": "2025-07-10T07:14:30.761Z",
+      "date": "2025-07-10",
+      "tournamentName": "Test Tournament -Single",
+      "userCount": 102,
+      "emailsSent": 102
+    },
+    {
+      "key": "8868050019186909184-reminder-2025-07-10",
+      "tournamentId": "8868050019186909184",
+      "emailType": "reminder",
+      "sentAt": "2025-07-10T08:44:08.508Z",
+      "date": "2025-07-10",
+      "tournamentName": "TGC Single Tournament-A",
+      "participantCount": 19,
+      "emailsSent": 19
     }
   ]
 }

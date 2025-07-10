@@ -9,24 +9,24 @@ const sendTournamentReminders = async () => {
         // Clean up old tracking entries first
         emailTrackingService.cleanupOldEntries();
 
-        // 1. Fetch all tournaments and filter for those starting today (in their timezone)
+        // 1. Fetch all tournaments and filter for those starting in ~8 hours (UTC)
         const allTournaments = await tournamentService.fetchAllTournaments();
-        const { startingToday } = tournamentService.filterTournaments(allTournaments);
+        const tournamentsStartingIn8Hours = filterTournamentsStartingIn8Hours(allTournaments);
 
-        if (startingToday.length === 0) {
-            console.log('No tournaments starting today. No reminders to send.');
-            return { success: true, message: 'No tournaments starting today.' };
+        if (tournamentsStartingIn8Hours.length === 0) {
+            console.log('No tournaments starting in ~8 hours. No reminders to send.');
+            return { success: true, message: 'No tournaments starting in ~8 hours.' };
         }
 
-        console.log(`Found ${startingToday.length} tournament(s) starting today.`);
+        console.log(`Found ${tournamentsStartingIn8Hours.length} tournament(s) starting in ~8 hours.`);
         let emailsSent = 0;
         let emailsSkipped = 0;
         let participantsFiltered = 0;
 
         // 2. For each tournament, get participants and send emails
-        for (const tournament of startingToday) {
+        for (const tournament of tournamentsStartingIn8Hours) {
             try {
-                // Debug timezone information
+                // Debug timing information (UTC only)
                 const startDateString = tournament.full_name.split(',')[0];
                 const startDate = new Date(startDateString);
                 const now = new Date();
@@ -34,22 +34,9 @@ const sendTournamentReminders = async () => {
                 
                 console.log(`\n=== Processing Tournament: ${tournament.name} ===`);
                 console.log(`Tournament ID: ${tournament.tournament_ID}`);
-                console.log(`Tournament timezone: ${tournament.timezone}`);
                 console.log(`Start time (UTC): ${startDate.toISOString()}`);
                 console.log(`Current time (UTC): ${now.toISOString()}`);
                 console.log(`Hours remaining: ${hoursRemaining}`);
-                
-                // Show times in tournament timezone if possible
-                try {
-                    const { utcToZonedTime } = require('date-fns-tz');
-                    const tournamentTZ = tournament.timezone || 'UTC';
-                    const startInTZ = utcToZonedTime(startDate, tournamentTZ);
-                    const nowInTZ = utcToZonedTime(now, tournamentTZ);
-                    console.log(`Start time (${tournamentTZ}): ${startInTZ}`);
-                    console.log(`Current time (${tournamentTZ}): ${nowInTZ}`);
-                } catch (error) {
-                    console.log(`Could not show timezone info: ${error.message}`);
-                }
 
                 // Check if reminder already sent for this tournament today
                 if (emailTrackingService.hasEmailBeenSent(tournament.tournament_ID, 'reminder')) {
@@ -151,6 +138,33 @@ const sendTournamentReminders = async () => {
         console.error('An unexpected error occurred during the reminder process:', error);
         throw new Error('Failed to send tournament reminders.');
     }
+};
+
+// Helper function to filter tournaments starting in approximately 8 hours (UTC)
+const filterTournamentsStartingIn8Hours = (tournaments) => {
+    const now = new Date();
+    const eightHoursFromNow = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // 8 hours in milliseconds
+    const tolerance = 30 * 60 * 1000; // 30 minutes tolerance in milliseconds
+
+    return tournaments.filter(tournament => {
+        try {
+            const startDateString = tournament.full_name.split(',')[0];
+            const startDate = new Date(startDateString);
+            
+            // Check if tournament starts within 30 minutes of 8 hours from now
+            const timeDifference = Math.abs(startDate.getTime() - eightHoursFromNow.getTime());
+            const isWithinTimeWindow = timeDifference <= tolerance;
+            
+            if (isWithinTimeWindow) {
+                console.log(`Tournament "${tournament.name}" starts at ${startDate.toISOString()}, which is ~8 hours from now (${eightHoursFromNow.toISOString()})`);
+            }
+            
+            return isWithinTimeWindow;
+        } catch (error) {
+            console.error(`Error parsing start date for tournament ${tournament.name}:`, error.message);
+            return false;
+        }
+    });
 };
 
 module.exports = { sendTournamentReminders };
