@@ -64,7 +64,14 @@ const sendNewTournamentNotifications = async () => {
         
         // 4. Process users and extract language preference from about field
         const processedUsers = allUsers
-            .filter(user => user.emailAddress && user.isActive)
+            .filter(user => {
+                // First filter: user must have email and be active
+                if (!user.emailAddress || !user.isActive) {
+                    return false;
+                }
+                // Second filter: email domain must be allowed (mailinator filtering)
+                return tournamentService.isEmailDomainAllowed(user.emailAddress);
+            })
             .map(user => {
                 // Language processing: 'ar' -> 'arabic', 'en' -> 'english', default to 'arabic'
                 let language = 'arabic'; // Default
@@ -80,6 +87,8 @@ const sendNewTournamentNotifications = async () => {
                     language: language
                 };
             });
+
+        console.log(`📧 Applied domain filter: Only users with mailinator emails will receive notifications`);
 
         // Remove duplicates based on email
         const uniqueUsers = [...new Map(

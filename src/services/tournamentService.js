@@ -13,11 +13,53 @@ const AUTH_ENDPOINT = '/api/TokenAuth/Authenticate';
 let cachedToken = null;
 let tokenExpiry = null;
 
+// Allowed email domains for tournament notifications
+const ALLOWED_EMAIL_DOMAINS = [
+    'mailinator.com',
+    'mailinator'
+    // Add more domains here as needed
+];
+
+// Helper function to check if email domain is allowed
+const isEmailDomainAllowed = (email) => {
+    if (!email || typeof email !== 'string') {
+        return false;
+    }
+    
+    const emailLower = email.toLowerCase();
+    
+    return ALLOWED_EMAIL_DOMAINS.some(domain => {
+        // Check if email ends with the domain (with or without .com)
+        if (domain.includes('.')) {
+            // Full domain like 'mailinator.com'
+            return emailLower.endsWith(`@${domain}`);
+        } else {
+            // Partial domain like 'mailinator'
+            return emailLower.includes(`@${domain}`) || emailLower.endsWith(`@${domain}.com`);
+        }
+    });
+};
+
+// Function to add new allowed domains (can be called manually)
+const addAllowedEmailDomain = (domain) => {
+    if (domain && typeof domain === 'string' && !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+        ALLOWED_EMAIL_DOMAINS.push(domain.toLowerCase());
+        console.log(`✅ Added new allowed email domain: ${domain}`);
+        return true;
+    }
+    return false;
+};
+
+// Function to get current allowed domains
+const getAllowedEmailDomains = () => {
+    return [...ALLOWED_EMAIL_DOMAINS];
+};
+
 // Authenticate and get fresh token for user API calls
 const authenticateAndGetToken = async () => {
     try {
-        // Check if we have a valid cached token (with 5 minute buffer)
-        if (cachedToken && tokenExpiry && Date.now() < (tokenExpiry - 5 * 60 * 1000)) {
+        // Check if we have a valid cached token (with 10 minute buffer for safety)
+        if (cachedToken && tokenExpiry && Date.now() < (tokenExpiry - 10 * 60 * 1000)) {
             return cachedToken;
         }
 
@@ -31,18 +73,19 @@ const authenticateAndGetToken = async () => {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json, text/plain, */*'
             },
-            timeout: 15000 // 15 second timeout for auth
+            timeout: 30000, // 30 second timeout for auth
+            validateStatus: (status) => status >= 200 && status < 300
         });
 
         if (!response.data || !response.data.result || !response.data.result.accessToken) {
             throw new Error('Invalid authentication response - no access token received.');
         }
 
-        // Cache the token (assuming 1 hour validity, we'll refresh before that)
+        // Cache the token with shorter expiry for better reliability (30 minutes)
         cachedToken = response.data.result.accessToken;
-        tokenExpiry = Date.now() + (60 * 60 * 1000); // 1 hour from now
+        tokenExpiry = Date.now() + (30 * 60 * 1000); // 30 minutes from now
 
-        console.log('✅ Authentication successful - token cached');
+        console.log('✅ Authentication successful - token cached for 30 minutes');
         return cachedToken;
 
     } catch (error) {
@@ -54,7 +97,8 @@ const authenticateAndGetToken = async () => {
         if (error.response) {
             console.error('Auth Error Details:', {
                 status: error.response.status,
-                statusText: error.response.statusText
+                statusText: error.response.statusText,
+                data: error.response.data
             });
         }
         throw new Error('Could not authenticate to get access token.');
@@ -66,9 +110,13 @@ const createAuthenticatedRequestForUsers = async () => {
     const token = await authenticateAndGetToken();
     return axios.create({
         headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
         },
-        timeout: 60000 // 60 second timeout for user requests
+        timeout: 90000, // 90 second timeout for user requests
+        maxRedirects: 5,
+        validateStatus: (status) => status >= 200 && status < 400
     });
 };
 
@@ -196,27 +244,49 @@ const filterRecentTournaments = (tournaments) => {
 };
 
 const fetchAllUsers = async () => {
-    const batchSize = 100; // Batch size for pagination - increased to 100
+    const batchSize = 50; // Reduced batch size for better reliability
+    const maxRetries = 3;
+    const baseDelay = 2000; // 2 seconds base delay
+    const maxDelay = 30000; // 30 seconds max delay
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     
+    // Helper function for exponential backoff
+    const getRetryDelay = (attempt) => Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+    
     try {
-        console.log('🚀 Fetching all users with mailinator keyword...');
+        console.log('🚀 Fetching all users using batch API calls...');
         
+        let allUsers = [];
+        let skipCount = 0;
+        let hasMoreUsers = true;
+        let totalFetched = 0;
+        let batchNumber = 1;
+        let consecutiveFailures = 0;
+
+        while (hasMoreUsers) {
+            console.log(`📥 Fetching batch ${batchNumber}: Skip=${skipCount}, MaxResults=${batchSize}`);
+            
+            let batchSuccess = false;
+            let retryAttempt = 0;
+            
+            while (!batchSuccess && retryAttempt < maxRetries) {
+                try {
+                    // Get fresh authenticated axios instance for each retry
         const authenticatedAxios = await createAuthenticatedRequestForUsers();
         
+                    // Configure request with longer timeout and better error handling
         const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
         const requestParams = {
-            keyword: 'mailinator'
-            // SkipCount: skipCount, // Commented out - no pagination
-            // MaxResultCount: batchSize // Commented out - no batching
+                        SkipCount: skipCount,
+                        MaxResultCount: batchSize
         };
         
-        console.log(`📥 Fetching all users with keyword: mailinator`);
         const startTime = Date.now();
         
-        // Single request logic - using keyword only
         const response = await authenticatedAxios.get(requestUrl, {
-            params: requestParams
+                        params: requestParams,
+                        timeout: 90000, // 90 seconds timeout
+                        validateStatus: (status) => status >= 200 && status < 300
         });
 
         if (!response.data || !response.data.result) {
@@ -229,69 +299,74 @@ const fetchAllUsers = async () => {
             throw new Error('Expected users array in API response.');
         }
 
-        const elapsed = Date.now() - startTime;
-        console.log(`✅ Fetched ${users.length} users in ${elapsed}ms`);
+                                        // Add all users to the collection (no domain filtering here)
+                    allUsers = allUsers.concat(users);
+                    totalFetched += users.length;
+                    
+                    const elapsed = Date.now() - startTime;
+                    console.log(`✅ Batch ${batchNumber} completed: ${users.length} users fetched in ${elapsed}ms. Total: ${totalFetched}`);
+                    
+                    // Check if we've reached the end - if we got fewer users than requested, we're done
+                    // Note: Check original users array, not filtered, to determine if more data exists
+                    hasMoreUsers = users.length === batchSize;
+                    skipCount += batchSize;
+                    batchNumber++;
+                    consecutiveFailures = 0; // Reset failure counter on success
+                    batchSuccess = true;
+                    
+                } catch (error) {
+                    retryAttempt++;
+                    consecutiveFailures++;
+                    
+                    const isLastAttempt = retryAttempt >= maxRetries;
+                    const retryDelay = getRetryDelay(retryAttempt - 1);
+                    
+                    console.error(`🚨 Batch ${batchNumber} attempt ${retryAttempt} failed:`, {
+                        message: error.message,
+                        code: error.code,
+                        status: error.response?.status,
+                        skipCount: skipCount,
+                        isLastAttempt: isLastAttempt
+                    });
+                    
+                    if (isLastAttempt) {
+                        // If we've had too many consecutive failures, stop the process
+                        if (consecutiveFailures >= 5) {
+                            console.error('🚨 Too many consecutive failures, stopping batch process');
+                            throw new Error(`Failed to fetch users after ${maxRetries} retries: ${error.message}`);
+                        }
+                        
+                        // Skip this batch and continue with next
+                        console.log(`⚠️ Skipping batch ${batchNumber} after ${maxRetries} failed attempts`);
+                        skipCount += batchSize;
+                        batchNumber++;
+                        hasMoreUsers = true; // Continue with next batch
+                        batchSuccess = true; // Exit retry loop
+                    } else {
+                        // Wait before retrying
+                        console.log(`⏳ Retrying batch ${batchNumber} in ${retryDelay}ms...`);
+                        await sleep(retryDelay);
+                    }
+                }
+            }
+            
+            // Adaptive delay between batches based on recent performance
+            if (hasMoreUsers) {
+                const adaptiveDelay = consecutiveFailures > 0 ? 3000 : 1500; // Longer delay if we've had failures
+                await sleep(adaptiveDelay);
+            }
+        }
 
-        console.log(`🎉 Successfully fetched ${users.length} total users`);
-        return users;
-
-        // Commented out pagination logic
-        // let allUsers = [];
-        // let skipCount = 0;
-        // let hasMoreUsers = true;
-        // let totalFetched = 0;
-
-        // while (hasMoreUsers) {
-        //     console.log(`📥 Fetching batch: Skip=${skipCount}, Size=${batchSize}`);
-        //     
-        //     const requestUrl = `${config.userApiBaseUrl}${USERS_ENDPOINT}`;
-        //     const requestParams = {
-        //         keyword: 'mailinator',
-        //         SkipCount: skipCount,
-        //         MaxResultCount: batchSize
-        //     };
-        //     
-        //     const startTime = Date.now();
-        //     
-        //     const response = await authenticatedAxios.get(requestUrl, {
-        //         params: requestParams
-        //     });
-
-        //     if (!response.data || !response.data.result) {
-        //         throw new Error('Invalid API response format from users endpoint.');
-        //     }
-
-        //     const users = response.data.result.items || response.data.result;
-        //     
-        //     if (!Array.isArray(users)) {
-        //         throw new Error('Expected users array in API response.');
-        //     }
-
-        //     allUsers = allUsers.concat(users);
-        //     totalFetched += users.length;
-        //     
-        //     const elapsed = Date.now() - startTime;
-        //     console.log(`✅ Fetched ${users.length} users in ${elapsed}ms. Total: ${totalFetched}`);
-        //     
-        //     // Check if we've reached the end
-        //     hasMoreUsers = users.length === batchSize;
-        //     skipCount += batchSize;
-        //     
-        //     // Brief pause between batches to reduce server load
-        //     if (hasMoreUsers) {
-        //         await sleep(1000); // 1 second pause
-        //     }
-        // }
-
-        // console.log(`🎉 Successfully fetched ${totalFetched} total users`);
-        // return allUsers;
+        console.log(`🎉 Successfully fetched ${totalFetched} total users in ${batchNumber - 1} batches`);
+        return allUsers;
 
     } catch (error) {
-        console.error('🚨 User fetch failed:', {
+        console.error('🚨 User fetch process failed:', {
             message: error.message,
             code: error.code,
             status: error.response?.status,
-            url: error.config?.url
+            url: error.config?.url,
+            params: error.config?.params
         });
         throw new Error(`Failed to fetch users: ${error.message}`);
     }
@@ -304,4 +379,7 @@ module.exports = {
     fetchAllRegistrations,
     filterRecentTournaments,
     fetchAllUsers,
+    addAllowedEmailDomain,
+    getAllowedEmailDomains,
+    isEmailDomainAllowed
 };
